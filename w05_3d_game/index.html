@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soul Maze</title>
+  </head>
+  <body>
+    <div id="hud" class="hud hidden">
+      <div class="brand">SOUL <span>MAZE</span></div>
+      <div id="objective" class="objective">收集灵魂碎片，寻找出口</div>
+      <div class="stats"><span>碎片 <b id="fragments">0/0</b></span><span>耐力 <b id="stamina">100%</b></span><span>时间 <b id="time">0:00</b></span><span id="enemyState" class="enemy-state">PATROL</span></div>
+      <button id="muteButton" class="icon-button" aria-label="切换静音">🔊</button>
+    </div>
+    <div id="gameCanvas"></div>
+    <div id="crosshair" class="crosshair hidden">+</div>
+    <section id="menu" class="overlay">
+      <div class="panel">
+        <p class="eyebrow">S3D-M1-03 · CONTINUOUS MAZE PROTOTYPE</p>
+        <h1>SOUL <strong>MAZE</strong></h1>
+        <p class="tagline">探索昏暗迷宫，收集灵魂碎片，躲开追猎者，找到出口。</p>
+        <div class="controls"><span>移动</span><kbd>W A S D</kbd><span>冲刺</span><kbd>SHIFT</kbd><span>视角</span><kbd>鼠标</kbd><span>暂停</span><kbd>ESC</kbd></div>
+        <div class="actions"><button id="startButton" class="primary">进入迷宫</button><button id="demoButton" class="secondary">Watch Demo</button></div>
+        <p id="menuMessage" class="message">收集全部灵魂碎片后，出口才会解锁。</p>
+      </div>
+    </section>
+    <section id="pause" class="overlay hidden"><div class="panel result-panel"><p class="eyebrow">PAUSED</p><h2>游戏暂停</h2><p>鼠标锁定已退出。重新进入迷宫以继续探索。</p><button id="resumeButton" class="primary">继续游戏</button><button id="pauseMenuButton" class="secondary">返回菜单</button></div></section>
+    <section id="result" class="overlay hidden"><div class="panel result-panel"><p class="eyebrow" id="resultEyebrow">RUN COMPLETE</p><h2 id="resultTitle">ESCAPED</h2><p id="resultText"></p><button id="restartButton" class="primary">再来一局</button><button id="menuButton" class="secondary">返回菜单</button></div></section>
+    <div id="demoBadge" class="demo-badge hidden">AUTO DEMO <span>·</span> 观看中 <button id="exitDemo">退出</button></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
