@@ -1,0 +1,23 @@
+# Node.js dependencies
+**/node_modules/
+
+# Vite build output and cache
+**/dist/
+**/.vite/
+**/.cache/
+
+# Python cache
+**/__pycache__/
+*.py[cod]
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Operating system generated files
+.DS_Store
+Thumbs.db
