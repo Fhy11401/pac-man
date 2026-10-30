@@ -14,8 +14,8 @@ if exist "C:\Program Files\WindowsApps\OpenAI.CodexPrimaryRuntime.v26-1017-2736-
 )
 where py >nul 2>nul
 if not errorlevel 1 (
-  echo Open http://127.0.0.1:5180/ in your browser.
-  py -3 -m http.server 5180 --bind 127.0.0.1
+  echo Open http://127.0.0.1:5182/ in your browser.
+  py -3 -m http.server 5182 --bind 127.0.0.1
   pause
   exit /b
 )

@@ -1,5 +1,5 @@
 import {MOUSE_RADIANS_PER_PIXEL} from './look-input.js';
-import { SHARDS, EXIT, RULES, distance, cell, routesFrom } from './world.js';
+import { SHARDS, EXIT, distance, cell, routesFrom } from './world.js';
 const wrap = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const shardAt = new Map(SHARDS.map((p, i) => [`${p.x},${p.z}`, i]));
@@ -84,7 +84,9 @@ export class DemoController {
   input(game, dt) {
     if(game.deaths!==this.deaths){this.route=[];this.deaths=game.deaths;this.yaw=-Math.PI/2;this.turnSpeed=0;this.mouseStroke=new MouseStroke();this.evadeCooldown=0;this.travel={x:1,z:0};}
     if(game.phase!=='playing')return {x:0,z:0};
-    while(this.route.length&&distance(game.player,this.route[0])<.035)this.route.shift();
+    // Advance before inertia carries us beyond a waypoint and makes the controller turn back.
+    const waypointReach=Math.max(.035,Math.hypot(game.motionVelocity.x,game.motionVelocity.z)*(dt*.5+game.tuning.movementInertia*.5));
+    while(this.route.length&&distance(game.player,this.route[0])<waypointReach)this.route.shift();
     if(!this.route.length)this.plan(game);
     if(!this.route.length)return {x:0,z:0};
     this.evadeCooldown=Math.max(0,this.evadeCooldown-dt);
@@ -94,7 +96,7 @@ export class DemoController {
     const alignment=-Math.sin(this.yaw)*dx-Math.cos(this.yaw)*dz;
     // Slow down for a corner, and finish an about-face before moving away.
     const pace=clamp((alignment+.05)/.9,0,1);
-    const scale=Math.min(pace,d/(RULES.sprintSpeed*dt));
+    const scale=Math.min(pace,d/(game.tuning.sprintSpeed*dt));
     if(scale>.01)this.travel={x:dx,z:dz};
     return {x:dx*scale,z:dz*scale,run:true};
   }

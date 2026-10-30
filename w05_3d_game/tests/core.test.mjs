@@ -4,7 +4,7 @@ import { createGame, tick, blocked } from '../src/core.js';
 import {proximityMix} from '../src/audio.js';
 import {stableFrameDt} from '../src/presentation.js';
 import { DemoController, DEMO_CAMERA } from '../src/demo.js';
-import { SHARDS, START, ENEMY_START, EXIT, distance, pathTo, RULES } from '../src/world.js';
+import { SHARDS, START, ENEMY_START, EXIT, distance, pathTo, RULES,wallInset } from '../src/world.js';
 
 for (const fps of [15, 30, 60, 144]) {
   test(`Demo wins through normal rules at ${fps} FPS`, () => {
@@ -71,7 +71,7 @@ test('Identical manual and demo input produce identical simulation state', () =>
 });
 
 for (const fps of [15, 30, 60, 144]) {
-  test('Sprint speed, acceleration and instant release at ' + fps + ' FPS', () => {
+  test('Sprint speed, acceleration and short release inertia at ' + fps + ' FPS', () => {
     const walk = createGame(), run = createGame();
     for (let i = 0; i < fps; i++) {
       tick(walk, { x: 1, z: 0 }, 1 / fps);
@@ -83,7 +83,10 @@ for (const fps of [15, 30, 60, 144]) {
     assert.ok(RULES.playerSpeed < RULES.enemySpeed && RULES.enemySpeed < RULES.sprintSpeed);
     const stopped = { ...run.player };
     tick(run, { x: 0, z: 0, run: true }, 1 / fps);
-    assert.deepEqual(run.player, stopped); assert.equal(run.sprinting, false);
+    assert.ok(distance(run.player,stopped)>0);assert.equal(run.sprinting, false);
+    for(let i=0;i<Math.ceil(RULES.movementInertia*fps)+1;i++)tick(run,{x:0,z:0},1/fps);
+    assert.equal(run.moveSpeed,0);assert.ok(distance(run.player,stopped)<=RULES.sprintSpeed*RULES.movementInertia);
+    const settled={...run.player};tick(run,{x:0,z:0},1/fps);assert.deepEqual(run.player,settled);
     const diagonal = createGame(), straight = createGame();
     tick(diagonal, { x: 1, z: 1, run: true }, .1);
     tick(straight, { x: 1, z: 0, run: true }, .1);
@@ -102,7 +105,7 @@ test('Final escape pursuit is faster, still slower than player sprint', () => {
   assert.ok(escape.enemy.x>normal.enemy.x);assert.ok(RULES.escapeEnemySpeed<RULES.sprintSpeed);
 });
 test('Pickup trails are collected from the side of a clear corridor',()=>{
-  const game=createGame();game.player={x:2,z:1.30};tick(game,{x:0,z:0},1/60);
+  const game=createGame();game.player={x:2,z:1.5-wallInset()-RULES.playerRadius-.001};tick(game,{x:0,z:0},1/60);
   assert.equal(blocked(game.player),false);assert.ok(game.collected.has(SHARDS.findIndex(p=>p.x===2&&p.z===1)));
 });
 

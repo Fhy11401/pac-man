@@ -1,5 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import {MAP,isOpen} from './world.js';
+import {contactShade} from './hotel-materials.js';
 
 function painting(index){
   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=384;
@@ -11,11 +12,17 @@ function painting(index){
     for(let x=0;x<=256;x+=8)c.lineTo(x,188+layer*46+Math.sin(x*.022+index+layer)*22+Math.sin(x*.053+layer)*10);
     c.lineTo(256,384);c.fill();
   }
-  c.fillStyle='#20292a';c.fillRect(67,177,122,94);
-  c.beginPath();c.moveTo(52,178);c.lineTo(125,126);c.lineTo(204,178);c.fill();
-  c.fillRect(86,137,14,42);c.fillRect(159,141,12,36);
-  for(let row=0;row<3;row++)for(let col=0;col<5;col++){c.fillStyle=(row+col+index)%3?'#bca477':'#26383b';c.fillRect(78+col*21,187+row*25,8,13);}
-  c.fillStyle='#0f2226';for(const x of [19,33,219,238]){c.fillRect(x,158,4,158);for(let y=146;y<294;y+=18){c.beginPath();c.moveTo(x+2,y-28);c.lineTo(x-17,y+20);c.lineTo(x+21,y+20);c.fill();}}
+  if(index===0){
+    c.fillStyle='#20292a';c.fillRect(67,177,122,94);c.beginPath();c.moveTo(52,178);c.lineTo(125,126);c.lineTo(204,178);c.fill();c.fillRect(86,137,14,42);c.fillRect(159,141,12,36);
+    for(let row=0;row<3;row++)for(let col=0;col<5;col++){c.fillStyle=(row+col)%3?'#bca477':'#26383b';c.fillRect(78+col*21,187+row*25,8,13);}
+  }else if(index===1){
+    c.strokeStyle='#192427';c.lineWidth=6;c.beginPath();c.moveTo(80,340);c.bezierCurveTo(106,263,71,205,95,110);c.stroke();c.lineWidth=2;
+    for(let i=0;i<9;i++){const y=140+i*18,side=i%2?1:-1;c.beginPath();c.moveTo(90,y+40);c.lineTo(90+side*(23+i*3),y);c.lineTo(90+side*(40+i*3),y-12);c.stroke();}
+    c.fillStyle='#202d2c';c.fillRect(161,265,37,3);c.fillRect(166,267,3,17);c.fillRect(191,267,3,17);
+  }else{
+    c.fillStyle='#42383a';c.beginPath();c.ellipse(133,174,45,62,-.1,0,Math.PI*2);c.fill();c.fillStyle='#1c2026';c.beginPath();c.moveTo(45,384);c.bezierCurveTo(43,244,210,229,224,384);c.fill();
+    c.fillStyle='#a18c7144';c.beginPath();c.ellipse(139,180,25,42,.08,0,Math.PI*2);c.fill();c.fillStyle='#172126';c.fillRect(124,164,13,4);c.fillRect(147,165,12,4);
+  }
   let seed=918+index;for(let n=0;n<12000;n++){seed=(seed*1664525+1013904223)>>>0;const x=seed%256;seed=(seed*1664525+1013904223)>>>0;const y=seed%384;c.fillStyle=n%2?'#f9d99a0b':'#100b160e';c.fillRect(x,y,2+n%4,1);}
   const shade=c.createRadialGradient(128,175,40,128,175,230);shade.addColorStop(0,'#0000');shade.addColorStop(1,'#0b080ca0');c.fillStyle=shade;c.fillRect(0,0,256,384);
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
@@ -30,43 +37,61 @@ function plaque(text,sub){
 
 // Every ornament sits against a wall or above eye level; the playable maze stays unchanged.
 export function decorateHotel(v,world,unit){
-  const ivory=new THREE.MeshStandardMaterial({color:0xb6a28b,roughness:.88});
-  const inset=new THREE.MeshStandardMaterial({color:0x291d22,roughness:.7});
+  const ivory=new THREE.MeshStandardMaterial({color:0x897e6c,roughness:.88});
+  const inset=new THREE.MeshStandardMaterial({color:0x302622,roughness:.7});
   const art=[0,1,2].map(painting),signs=[plaque('西翼 · 客房','WEST WING  /  GUEST ROOMS'),plaque('东翼 · 画廊','EAST WING  /  GALLERY')];
+  const shade=contactShade();let luggageCount=0,paintingCount=0;
   const lamp=new THREE.MeshStandardMaterial({color:0xead6ac,emissive:0xffc98b,emissiveIntensity:.3,roughness:.45});
   MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
     if(tile==='#')return;
     const center=world(x,z);
-    // Coffered ceiling and a fine perimeter moulding.
+    const horizontal=isOpen(x-1,z)||isOpen(x+1,z),vertical=isOpen(x,z-1)||isOpen(x,z+1),isCorner=horizontal&&vertical;
+    // Follow the corridor with plaster ribs, rather than outlining every tile in gold.
     for(const side of [-1,1]){
-      v.box(unit,.07,.075,ivory,center.x,3.025,center.z+side*1.13);
-      v.box(.075,.07,unit,ivory,center.x+side*1.13,3.025,center.z);
+      if(horizontal)v.box(unit,.045,.06,ivory,center.x,3.025,center.z+side*(1.13-v.wallInset*unit));
+      if(vertical)v.box(.06,.045,unit,ivory,center.x+side*1.13,3.025,center.z);
     }
-    if((x+z)%5===0){
+    // Every right-angle turn and junction receives its own ceiling fixture.
+    if(isCorner||(x+z)%5===0){
       const rose=v.mesh(new THREE.CylinderGeometry(.28,.28,.055,20),v.mat.brass);rose.position.set(center.x,3.02,center.z);
       const glass=v.mesh(new THREE.SphereGeometry(.23,20,10,0,Math.PI*2,0,Math.PI/2),lamp);glass.rotation.x=Math.PI;glass.position.set(center.x,2.99,center.z);glass.scale.y=.5;
-      v.lampPositions.push(new THREE.Vector3(center.x,2.78,center.z));
+      const lightPosition=new THREE.Vector3(center.x,2.78,center.z);lightPosition.isCorner=isCorner;const age=(x*7+z*11)%3;lightPosition.strength=isCorner?[12.2,14.2,13.1][age]:[7.2,9.4,11.5][age];lightPosition.reach=isCorner?5.9:5.3;lightPosition.angle=isCorner?1.04:.91;lightPosition.warmth=age===0?0xe3d5bd:0xffd2a6;v.lampPositions.push(lightPosition);
     }
     for(const d of [{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2},{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0}]){
       if(isOpen(x+d.x,z+d.z))continue;
-      const hash=x*17+z*13+(d.x+1)*3+d.z,g=new THREE.Group();g.position.copy(world(x+d.x*.482,z+d.z*.482));g.rotation.y=d.a;v.scene.add(g);
+      const hash=x*17+z*13+(d.x+1)*3+d.z,g=new THREE.Group();g.position.copy(world(x+d.x*(.482-v.wallInset),z+d.z*(.482-v.wallInset)));g.rotation.y=d.a;v.scene.add(g);
       // Shallow raised joinery stays inside the player's collision clearance.
       for(const sx of [-.72,.72]){
         v.box(.60,.62,.025,inset,sx,.53,.025,g);
-        for(const edge of [-1,1]){v.box(.025,.65,.04,v.mat.brass,sx+edge*.31,.53,.04,g);v.box(.64,.025,.04,v.mat.brass,sx,.53+edge*.325,.04,g);}
+        for(const edge of [-1,1]){v.box(.025,.65,.04,v.mat.wood,sx+edge*.31,.53,.04,g);v.box(.64,.025,.04,v.mat.wood,sx,.53+edge*.325,.04,g);}
       }
-      for(const side of [-1,1]){v.box(.10,1.76,.055,v.mat.wood,side*1.13,1.96,.015,g);v.box(.15,.075,.065,v.mat.brass,side*1.13,2.78,.02,g);}
+      if(hash%2===0)for(const side of [-1,1]){v.box(.065,1.76,.055,v.mat.wood,side*1.13,1.96,.015,g);v.box(.10,.055,.065,v.mat.wood,side*1.13,2.78,.02,g);}
       if(hash%7!==0&&hash%4!==0){
         if(hash%3===0){
-          v.box(.77,1.04,.065,v.mat.black,0,1.95,.032,g);
-          for(const side of [-1,1]){v.box(.055,1.06,.09,v.mat.brass,side*.40,1.95,.07,g);v.box(.85,.055,.09,v.mat.brass,0,1.95+side*.53,.07,g);}
-          const picture=v.mesh(new THREE.PlaneGeometry(.73,.96),art[(x+z)%3],g);picture.position.set(0,1.95,.088);
+          const frame=new THREE.Group();frame.position.set(0,1.95,0);g.add(frame);
+          const variant=(x*3+z)%3;frame.scale.set(variant===1?1.12:.88,variant===1?.73:1,1);
+          if(paintingCount===2||paintingCount===13){frame.rotation.z=paintingCount===2?.045:-.035;v.detailAudit.crookedPictures++;}paintingCount++;
+          const shadow=v.mesh(new THREE.PlaneGeometry(.96,1.22),shade,frame);shadow.position.set(.018,-.018,.008);
+          v.box(.77,1.04,.065,v.mat.black,0,0,.032,frame);
+          for(const side of [-1,1]){const edge=v.box(.045,1.06,.09,v.mat.wood,side*.40,0,.07,frame);edge.castShadow=true;const rail=v.box(.85,.045,.09,v.mat.wood,0,side*.53,.07,frame);rail.castShadow=true;}
+          for(const side of [-1,1])v.box(.012,.99,.012,v.mat.brass,side*.373,0,.12,frame);
+          const picture=v.mesh(new THREE.PlaneGeometry(.73,.96),art[variant],frame);picture.position.set(0,0,.088);
+
         }else if(hash%5===0){
           const sign=v.mesh(new THREE.PlaneGeometry(.88,.275),signs[x<7?0:1],g);sign.position.set(0,2.09,.055);
         }
       }
       // Carpet edge follows the actual walls, including corners, rather than a square tile grid.
-      v.box(unit,.006,.035,v.mat.brass,0,.012,.18,g);
+      v.box(unit,.006,.022,inset,0,.012,.12,g);
+      // Only two forgotten cases, tucked entirely within the wall collision margin.
+      if(isCorner&&hash%13===0&&luggageCount<2&&x>2){
+        const leather=new THREE.MeshStandardMaterial({color:luggageCount?0x403a32:0x4e302c,roughness:.94});
+        const bag=v.box(.42,.52,.14,leather,.45,.28,.10,g);bag.castShadow=true;
+        for(const sx of [.32,.58])v.box(.022,.51,.008,v.mat.wood,sx,.28,.174,g);
+        v.box(.13,.022,.035,v.mat.black,.45,.56,.10,g);
+        const footShadow=v.mesh(new THREE.PlaneGeometry(.56,.25),shade,g);footShadow.rotation.x=-Math.PI/2;footShadow.position.set(.45,.014,.10);
+        luggageCount++;v.detailAudit.luggage++;v.detailAudit.maxPropProjection=(.5-.482)*unit+.10+.07;
+      }
     }
   }));
 }

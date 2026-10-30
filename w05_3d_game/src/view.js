@@ -1,26 +1,11 @@
+import {DEFAULT_TUNING} from './tuning.js';
 import * as THREE from '../vendor/three.module.js';
-import { MAP, SHARDS, EXIT, ENEMY_START, isOpen, RULES } from './world.js';
+import { MAP, SHARDS, EXIT, ENEMY_START, isOpen, RULES,CELL_SIZE,wallInset } from './world.js';
 import {decorateHotel} from './hotel-detail.js';
+import {hotelTexture as texture,makeHotelMaterials} from './hotel-materials.js';
 import {SCARE_TURN_SECONDS} from './presentation.js';
-export const UNIT = 2.4;
+export const UNIT = CELL_SIZE;
 const world = (x,z,y=0) => new THREE.Vector3((x-7)*UNIT,y,(z-7)*UNIT);
-function texture(kind) {
-  const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');
-  x.fillStyle=kind==='paper'?'#a18d70':kind==='carpet'?'#491b2b':'#3d2829';x.fillRect(0,0,512,512);
-  let seed=1894;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-  for(let i=0;i<16000;i++){const a=random()*.13;x.fillStyle=`rgba(${random()>.5?'255,225,192':'0,0,0'},${a})`;x.fillRect(random()*512,random()*512,1+random()*2,1+random()*2);}
-  if(kind==='paper') {
-    for(let j=-1;j<6;j++)for(let i=-1;i<6;i++){
-      x.save();x.translate(i*100+(j%2)*50,j*110);x.strokeStyle='#483b36b0';x.fillStyle='#514239bb';x.lineWidth=2;
-      for(let k=0;k<4;k++){x.rotate(Math.PI/2);x.beginPath();x.moveTo(0,0);x.bezierCurveTo(30,-40,36,-14,8,-8);x.bezierCurveTo(24,-9,20,-30,0,-42);x.bezierCurveTo(-10,-27,-14,-12,0,0);x.fill();x.stroke();}
-      x.strokeStyle='#e1bc7370';x.beginPath();x.moveTo(0,-50);x.lineTo(39,0);x.lineTo(0,50);x.lineTo(-39,0);x.closePath();x.stroke();x.restore();
-    }
-  } else if(kind==='carpet') {
-    x.save();x.translate(256,256);for(let ring=0;ring<4;ring++){x.strokeStyle=ring%2?'#b5936060':'#be6c7450';x.lineWidth=2;x.beginPath();for(let k=0;k<=64;k++){const a=k*Math.PI/32,r=72+ring*38+Math.cos(a*8)*12;x.lineTo(Math.cos(a)*r,Math.sin(a)*r);}x.stroke();}x.restore();
-    for(let j=0;j<8;j++)for(let i=0;i<8;i++){x.strokeStyle='#81525d35';x.beginPath();const a=i*64+32,b=j*64+32;x.moveTo(a,b-22);x.lineTo(a+16,b);x.lineTo(a,b+22);x.lineTo(a-16,b);x.closePath();x.stroke();}
-  } else {for(let i=0;i<60;i++){x.strokeStyle=`rgba(12,7,5,${random()*.25})`;x.lineWidth=random()*2;x.beginPath();const a=random()*512;x.moveTo(a,0);x.bezierCurveTo(a+15,170,a-8,300,a,512);x.stroke();}x.strokeStyle='#07050480';x.lineWidth=4;x.strokeRect(15,15,482,482);x.strokeStyle='#9b795133';x.lineWidth=2;x.strokeRect(24,24,464,464);}
-  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;
-}
 function glowTexture(){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,1,32,32,32);g.addColorStop(0,'#fff');g.addColorStop(.15,'#d99cffbb');g.addColorStop(.5,'#8c3cbd30');g.addColorStop(1,'#0000');x.fillStyle=g;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
 // One original porcelain mask is used both in the corridor and in the contact animation.
 function makeMask(){
@@ -42,45 +27,72 @@ function makeMask(){
   return group;
 }
 export class WorldView {
-  constructor(container){
-    this.horizontalFov=94;this.runBlend=0;this.bobBlend=0;this.stepPhase=0;this.enemyPhase=0;this.enemyHeading=-Math.PI/2;
+  constructor(container,tuning=DEFAULT_TUNING){
+    this.corridorWidth=tuning.corridorWidth??DEFAULT_TUNING.corridorWidth;this.wallInset=wallInset(this.corridorWidth);this.eyeHeight=tuning.eyeHeight??DEFAULT_TUNING.eyeHeight;
+    this.horizontalFov=DEFAULT_TUNING.fov;this.runBobStrength=DEFAULT_TUNING.runBob;this.walkBobStrength=DEFAULT_TUNING.walkBob;this.runBlend=0;this.bobBlend=0;this.stepPhase=0;this.enemyPhase=0;this.enemyHeading=-Math.PI/2;
     this.reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');this.motionEnabled=!this.reducedMotion.matches;
-    this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#100d14');this.scene.fog=new THREE.Fog('#100d14',8,30);
+    this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#0d0b11');this.scene.fog=new THREE.Fog('#0d0b11',10,28);
     this.camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.045,70);this.camera.rotation.order='YXZ';
-    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));this.renderer.setSize(innerWidth,innerHeight);this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.95;this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.append(this.renderer.domElement);this.renderer.domElement.tabIndex=0;
-    this.scene.add(new THREE.HemisphereLight(0xc9b7cd,0x30202a,.38));const fill=new THREE.DirectionalLight(0xe5cdab,.40);fill.position.set(-8,20,4);this.scene.add(fill);
-    this.cameraLight=new THREE.PointLight(0xd4c6dd,.5,5,2);this.scene.add(this.cameraLight);
-    this.mat={paper:new THREE.MeshStandardMaterial({map:texture('paper'),roughness:1}),wood:new THREE.MeshStandardMaterial({map:texture('wood'),roughness:.85}),brass:new THREE.MeshStandardMaterial({color:0xb39863,metalness:.55,roughness:.4}),black:new THREE.MeshStandardMaterial({color:0x100c13,roughness:.9}),glow:new THREE.MeshBasicMaterial({color:0xffd2a2})};
+    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));this.renderer.setSize(innerWidth,innerHeight);this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.672;this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.append(this.renderer.domElement);this.renderer.domElement.tabIndex=0;
+    this.scene.add(new THREE.HemisphereLight(0xd3c4ce,0x85717a,.58));
+    this.scene.add(new THREE.AmbientLight(0xb5a5b7,.07));
+    // Preserve the outline of nearby walls without making the whole corridor bright.
+    this.cameraLight=new THREE.PointLight(0xbcb0c5,.40,3.8,2);this.scene.add(this.cameraLight);
+    this.mat=makeHotelMaterials();this.detailAudit={crookedPictures:0,ajarDoors:0,luggage:0,maxPropProjection:0};
     this.buildMap();decorateHotel(this,world,UNIT);this.batchStaticMeshes();this.buildShards();this.buildExit();this.buildEnemy();this.buildScare();
-    this.lights=Array.from({length:6},()=>{const light=new THREE.PointLight(0xffba7c,4.5,7,2);this.scene.add(light);return light;});this.lightClock=1;
+    // Static shadow maps update only when a pool slot moves to another real fixture.
+    // Downward cones keep the warm light local and prevent light leaking through walls.
+    this.lights=Array.from({length:10},()=>{const light=new THREE.SpotLight(0xffd29f,10,6.2,Math.PI/3.1,.78,2);light.castShadow=true;light.shadow.mapSize.set(512,512);light.shadow.camera.near=.06;light.shadow.bias=-.00015;light.shadow.normalBias=.025;light.shadow.autoUpdate=false;light.userData.fixture=-1;this.scene.add(light,light.target);return light;});this.lightClock=1;
     this.resize=()=>{this.camera.aspect=innerWidth/innerHeight;this.updateFov();this.renderer.setSize(innerWidth,innerHeight);};window.addEventListener('resize',this.resize);this.updateFov();
     this.ready=Promise.all([this.renderer.compileAsync(this.scene,this.camera),this.renderer.compileAsync(this.scareScene,this.scareCamera)]).catch(()=>{});
   }
+  dispose(){
+    window.removeEventListener('resize',this.resize);
+    const geometries=new Set(),materials=new Set(),textures=new Set();
+    for(const scene of [this.scene,this.scareScene])scene.traverse(object=>{
+      if(object.geometry)geometries.add(object.geometry);
+      if(object.material)for(const material of [object.material].flat())materials.add(material);
+      object.shadow?.map?.dispose();
+    });
+    for(const material of materials){for(const value of Object.values(material))if(value?.isTexture)textures.add(value);material.dispose();}
+    for(const texture of textures)texture.dispose();for(const geometry of geometries)geometry.dispose();
+    this.renderer.dispose();this.renderer.domElement.remove();
+  }
   updateFov(){this.camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(this.horizontalFov+this.runBlend*3)/2)/Math.max(1.6,this.camera.aspect)));this.camera.updateProjectionMatrix();}
-  mesh(geo,mat,parent=this.scene){const m=new THREE.Mesh(geo,mat);parent.add(m);return m;}
+  mesh(geo,mat,parent=this.scene){const m=new THREE.Mesh(geo,mat);m.receiveShadow=true;parent.add(m);return m;}
   box(w,h,d,mat,x,y,z,parent=this.scene){const m=this.mesh(new THREE.BoxGeometry(w,h,d),mat,parent);m.position.set(x,y,z);return m;}
   buildMap(){
     const walls=[];MAP.forEach((row,z)=>[...row].forEach((c,x)=>{if(c==='#')walls.push({x,z});}));const dummy=new THREE.Object3D();
-    for(const [h,y,pad,mat] of [[3.1,1.55,0,this.mat.paper],[1,.5,.018,this.mat.wood],[.09,1.03,.04,this.mat.brass],[.15,.075,.04,this.mat.black],[.10,2.96,.05,this.mat.brass],[.07,2.84,.035,this.mat.wood]]){
-      const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(UNIT+pad,h,UNIT+pad),mat,walls.length);mesh.castShadow=true;mesh.receiveShadow=true;walls.forEach((p,i)=>{dummy.position.copy(world(p.x,p.z,y));dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});this.scene.add(mesh);
+    for(const [h,y,pad,mat] of [[3.1,1.55,0,this.mat.paper],[1,.5,.018,this.mat.wood],[.055,1.03,.04,this.mat.wood],[.15,.075,.04,this.mat.black],[.07,2.96,.05,this.mat.wood],[.07,2.84,.035,this.mat.wood]]){
+      const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(UNIT+pad+2*this.wallInset*UNIT,h,UNIT+pad+2*this.wallInset*UNIT),mat,walls.length);mesh.castShadow=true;mesh.receiveShadow=true;walls.forEach((p,i)=>{dummy.position.copy(world(p.x,p.z,y));dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});this.scene.add(mesh);
     }
     const carpet=texture('carpet');carpet.repeat.set(15,15);const floor=this.mesh(new THREE.PlaneGeometry(15*UNIT,15*UNIT),new THREE.MeshStandardMaterial({map:carpet,roughness:1}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;
-    const ceiling=this.mesh(new THREE.PlaneGeometry(15*UNIT,15*UNIT),new THREE.MeshStandardMaterial({color:0x6c5b50,roughness:1,side:THREE.DoubleSide}));ceiling.rotation.x=Math.PI/2;ceiling.position.y=3.1;
-    this.lampPositions=[];let doorNumber=201;const shadeMaterial=new THREE.MeshStandardMaterial({color:0xceae84,emissive:0xa95d27,emissiveIntensity:.25,roughness:.9});
+    const ceiling=this.mesh(new THREE.PlaneGeometry(15*UNIT,15*UNIT),new THREE.MeshStandardMaterial({color:0x6c5b50,roughness:1,side:THREE.DoubleSide}));ceiling.rotation.x=Math.PI/2;ceiling.position.y=3.1;ceiling.receiveShadow=true;
+    this.lampPositions=[];let doorNumber=201;const shadeMaterial=this.mat.cloth;
     MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
       if(tile==='#')return;
       const edges=[{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2},{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0}].filter(d=>!isOpen(x+d.x,z+d.z));
       for(const d of edges){
         const hash=x*17+z*13+(d.x+1)*3+d.z;
         if(hash%7===0&&!(x===1&&z===1)){
-          const g=new THREE.Group();g.position.copy(world(x+d.x*.485,z+d.z*.485));g.rotation.y=d.a;this.scene.add(g);
-          this.box(1.10,2.25,.075,this.mat.black,0,1.125,0,g);this.box(.91,2.13,.09,this.mat.wood,0,1.065,.045,g);
-          for(const side of [-.54,.54])this.box(.07,2.3,.12,this.mat.brass,side,1.15,.05,g);this.box(1.15,.08,.12,this.mat.brass,0,2.29,.05,g);
-          this.box(.12,.035,.055,this.mat.brass,.3,1.02,.12,g);
-          const c=document.createElement('canvas');c.width=128;c.height=64;const cx=c.getContext('2d');cx.fillStyle='#201912';cx.fillRect(0,0,128,64);cx.strokeStyle='#95784b';cx.strokeRect(3,3,122,58);cx.fillStyle='#ccb58a';cx.font='28px Georgia';cx.textAlign='center';cx.fillText(String(doorNumber++),64,42);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;const sign=this.mesh(new THREE.PlaneGeometry(.32,.16),new THREE.MeshBasicMaterial({map:t}),g);sign.position.set(0,1.75,.10);
+          const g=new THREE.Group();g.position.copy(world(x+d.x*(.485-this.wallInset),z+d.z*(.485-this.wallInset)));g.rotation.y=d.a;this.scene.add(g);
+          // The dark backing and projecting jamb make the leaf sit inside a deep frame.
+          this.box(1.13,2.30,.018,this.mat.black,0,1.15,.002,g);
+          const hinge=new THREE.Group();hinge.position.set(-.455,1.075,.036);g.add(hinge);
+          const ajar=doorNumber%11===5;if(ajar){hinge.rotation.y=-.11;this.detailAudit.ajarDoors++;}
+          const leaf=this.box(.91,2.13,.04,this.mat.wood,.455,0,.01,hinge);leaf.castShadow=true;
+          for(const side of [-.55,.55]){const jamb=this.box(.085,2.34,.16,this.mat.wood,side,1.17,.068,g);jamb.castShadow=true;}
+          const lintel=this.box(1.18,.10,.16,this.mat.wood,0,2.34,.068,g);lintel.castShadow=true;
+          for(const yy of [-.54,.43])this.box(.66,.69,.014,this.mat.black,.455,yy,.034,hinge);
+          this.box(.12,.035,.055,this.mat.brass,.75,-.055,.065,hinge);
+          const c=document.createElement('canvas');c.width=128;c.height=64;const cx=c.getContext('2d');cx.fillStyle='#302923';cx.fillRect(0,0,128,64);cx.strokeStyle='#74664d';cx.strokeRect(3,3,122,58);cx.fillStyle='#c1ae8d';cx.font='28px Georgia';cx.textAlign='center';cx.fillText(String(doorNumber++),64,42);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;const sign=this.mesh(new THREE.PlaneGeometry(.23,.115),new THREE.MeshStandardMaterial({map:t,roughness:.72,metalness:.15}),hinge);sign.position.set(.455,.66,.038);
+
         } else if(hash%4===0){
-          const g=new THREE.Group();g.position.copy(world(x+d.x*.46,z+d.z*.46));g.rotation.y=d.a;this.scene.add(g);this.box(.14,.4,.055,this.mat.brass,0,1.95,0,g);this.box(.035,.035,.25,this.mat.brass,0,1.92,.12,g);
-          const shade=this.mesh(new THREE.CylinderGeometry(.11,.18,.26,12),shadeMaterial,g);shade.position.set(0,2.04,.23);const bulb=this.mesh(new THREE.SphereGeometry(.075,8,8),this.mat.glow,g);bulb.position.set(0,1.92,.23);g.updateMatrixWorld();this.lampPositions.push(bulb.getWorldPosition(new THREE.Vector3()));
+          const g=new THREE.Group();g.position.copy(world(x+d.x*(.46-this.wallInset),z+d.z*(.46-this.wallInset)));g.rotation.y=d.a;this.scene.add(g);this.box(.14,.4,.055,this.mat.brass,0,1.95,0,g);this.box(.035,.035,.25,this.mat.brass,0,1.92,.12,g);
+          const slim=hash%3===0;
+          const shade=this.mesh(slim?new THREE.CylinderGeometry(.10,.10,.30,12):new THREE.CylinderGeometry(.11,.18,.26,12),shadeMaterial,g);shade.position.set(0,2.04,.23);
+          const bulb=this.mesh(new THREE.SphereGeometry(.055,8,8),this.mat.glow,g);bulb.position.set(0,1.88,.23);g.updateMatrixWorld();
+          const lamp=bulb.getWorldPosition(new THREE.Vector3());lamp.strength=[8.2,10.8,12.2][hash%3];lamp.reach=4.9;lamp.angle=slim?.75:.88;lamp.warmth=hash%3===0?0xe8d2b7:0xffcf9e;lamp.aimX=-d.x*.20;lamp.aimZ=-d.z*.20;this.lampPositions.push(lamp);
         }
       }
     }));
@@ -118,12 +130,12 @@ export class WorldView {
     this.renderer.autoClear=false;this.renderer.clearDepth();this.renderer.render(this.scareScene,this.scareCamera);this.renderer.autoClear=true;
   }
   buildShards(){
-    this.shardMesh=new THREE.InstancedMesh(new THREE.OctahedronGeometry(.15),new THREE.MeshStandardMaterial({color:0xa855f7,emissive:0x9e30ee,emissiveIntensity:1.7,metalness:.3,roughness:.2}),SHARDS.length);
-    this.shardGlow=new THREE.InstancedMesh(new THREE.PlaneGeometry(.75,.75),new THREE.MeshBasicMaterial({map:glowTexture(),color:0xc28bff,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}),SHARDS.length);
+    this.shardMesh=new THREE.InstancedMesh(new THREE.OctahedronGeometry(.15),new THREE.MeshStandardMaterial({color:0x8758ae,emissive:0x7834a0,emissiveIntensity:.55,metalness:.22,roughness:.48}),SHARDS.length);
+    this.shardGlow=new THREE.InstancedMesh(new THREE.PlaneGeometry(.45,.45),new THREE.MeshBasicMaterial({map:glowTexture(),color:0xa87ac6,transparent:true,opacity:.26,depthWrite:false,blending:THREE.AdditiveBlending}),SHARDS.length);
     this.shardMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.shardGlow.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.scene.add(this.shardMesh,this.shardGlow);this.shardFade=new Float32Array(SHARDS.length).fill(1);this.dummy=new THREE.Object3D();
   }
   buildExit(){
-    this.exit=new THREE.Group();this.exit.position.copy(world(.53,EXIT.z));this.exit.rotation.y=Math.PI/2;this.scene.add(this.exit);
+    this.exit=new THREE.Group();this.exit.position.copy(world(.53+this.wallInset,EXIT.z));this.exit.rotation.y=Math.PI/2;this.scene.add(this.exit);
     for(const side of [-.7,.7])this.box(.12,2.55,.2,this.mat.brass,side,1.275,0,this.exit);this.box(1.52,.12,.2,this.mat.brass,0,2.55,0,this.exit);
     this.exitMaterial=new THREE.MeshBasicMaterial({color:0x9470c2,transparent:true,opacity:.12,side:THREE.DoubleSide});const field=this.mesh(new THREE.PlaneGeometry(1.25,2.4),this.exitMaterial,this.exit);field.position.y=1.22;
     this.exitRing=this.mesh(new THREE.TorusGeometry(.48,.025,8,64),new THREE.MeshBasicMaterial({color:0xb18fd3}),this.exit);this.exitRing.position.set(0,1.2,.08);
@@ -142,11 +154,14 @@ export class WorldView {
   }
   render(game,yaw,pitch,time,dt=1/60,active=true,motionScale=1){
     if(this.lastGame!==game){this.lastGame=game;this.shardFade.fill(1);this.enemyHeading=-Math.PI/2;this.bobBlend=0;}
+    // Actual travel speed drives bobbing equally for forward, backward and sideways motion.
     const speed=Math.hypot(game.playerVelocity.x,game.playerVelocity.z),moving=active&&game.phase==='playing'&&speed>.05, motion=this.motionEnabled&&!this.reducedMotion.matches;
     this.runBlend+=((moving&&game.sprinting&&!this.reducedMotion.matches?1:0)-this.runBlend)*(1-Math.exp(-dt*9));this.updateFov();
-    this.bobBlend+=((moving&&motion?motionScale:0)-this.bobBlend)*(1-Math.exp(-dt*16));if(moving)this.stepPhase+=speed*UNIT*dt*Math.PI*2/2.1;
-    const bob=Math.sin(this.stepPhase)*(.018+this.runBlend*.014)*this.bobBlend,sway=Math.cos(this.stepPhase*.5)*(.009+this.runBlend*.005)*this.bobBlend;
-    this.camera.position.copy(world(game.player.x,game.player.z,1.69+bob));this.camera.position.x+=Math.cos(yaw)*sway;this.camera.position.z-=Math.sin(yaw)*sway;this.camera.rotation.set(pitch,yaw,0,'YXZ');this.cameraLight.position.copy(this.camera.position);
+    const travelBlend=Math.min(1,speed/Math.max(.1,game.tuning.playerSpeed*.6));
+    this.bobBlend+=((moving&&motion?motionScale*travelBlend:0)-this.bobBlend)*(1-Math.exp(-dt*16));if(moving)this.stepPhase+=speed*UNIT*dt*Math.PI*2/2.1;
+    const runAmplitude=this.walkBobStrength+(this.runBobStrength-this.walkBobStrength)*this.runBlend;
+    const bob=Math.sin(this.stepPhase)*(.018+this.runBlend*.014)*this.bobBlend*runAmplitude,sway=Math.cos(this.stepPhase*.5)*(.009+this.runBlend*.005)*this.bobBlend*runAmplitude;
+    this.camera.position.copy(world(game.player.x,game.player.z,this.eyeHeight+bob));this.camera.position.x+=Math.cos(yaw)*sway;this.camera.position.z-=Math.sin(yaw)*sway;this.camera.rotation.set(pitch,yaw,0,'YXZ');this.cameraLight.position.copy(this.camera.position);
     const es=Math.hypot(game.enemyVelocity.x,game.enemyVelocity.z);if(active&&game.phase==='playing'){this.enemyPhase+=es*UNIT*dt*Math.PI/1.65;if(es>.01){const target=Math.atan2(game.enemyVelocity.x,game.enemyVelocity.z),delta=Math.atan2(Math.sin(target-this.enemyHeading),Math.cos(target-this.enemyHeading));this.enemyHeading+=delta*(1-Math.exp(-dt*15));}}
     if(game.phase==='caught'){
       const target=Math.atan2(game.player.x-game.enemy.x,game.player.z-game.enemy.z);
@@ -157,7 +172,16 @@ export class WorldView {
     this.warningLight.position.copy(world(game.enemy.x,game.enemy.z,1.05));this.warningLight.target.position.copy(this.warningLight.position).add(new THREE.Vector3(Math.sin(this.enemyHeading)*5,-1.02,Math.cos(this.enemyHeading)*5));this.warningLight.visible=game.phase==='playing';
     SHARDS.forEach((p,i)=>{const fade=this.shardFade[i]=Math.max(0,this.shardFade[i]-(game.collected.has(i)?dt*6:0));const dummy=this.dummy;dummy.position.set((p.x-7)*UNIT,.87+Math.sin(time*2+i)*.035+(1-fade)*.2,(p.z-7)*UNIT);dummy.rotation.set(0,time*.9+i*.4,0);dummy.scale.setScalar(fade);dummy.updateMatrix();this.shardMesh.setMatrixAt(i,dummy.matrix);dummy.quaternion.copy(this.camera.quaternion);dummy.updateMatrix();this.shardGlow.setMatrixAt(i,dummy.matrix);});this.shardMesh.instanceMatrix.needsUpdate=true;this.shardGlow.instanceMatrix.needsUpdate=true;
     const unlocked=game.collected.size===SHARDS.length;this.exitMaterial.color.setHex(unlocked?0x74f2b8:0x9470c2);this.exitMaterial.opacity=unlocked?.27+Math.sin(time*3)*.05:.08;this.exitRing.material.color.setHex(unlocked?0x9bffcc:0x5a3d72);this.exitRing.rotation.z=time*(unlocked?.6:.06);
-    this.lightClock+=dt;if(this.lightClock>.25){this.lightClock=0;const nearest=[...this.lampPositions].sort((a,b)=>a.distanceToSquared(this.camera.position)-b.distanceToSquared(this.camera.position));this.lights.forEach((light,i)=>{light.position.copy(nearest[i]??this.camera.position);light.color.setHex(0xffba7c);});}
+    this.lightClock+=dt;if(this.lightClock>.05){this.lightClock=0;
+      // Prelight the view ahead (~half a second of running), not just the closest bulbs.
+      // Existing slots receive a small hysteresis bonus so walking near a tie cannot flicker.
+      const ahead=this.camera.position.clone().add(new THREE.Vector3(-Math.sin(yaw)*3,0,-Math.cos(yaw)*3));
+      const predicted=this.camera.position.clone().add(new THREE.Vector3(game.playerVelocity.x*UNIT*.45,0,game.playerVelocity.z*UNIT*.45));
+      const retained=new Set(this.lights.map(light=>light.userData.fixture));
+      const nearest=this.lampPositions.map((position,index)=>({position,index,distance:Math.min(position.distanceToSquared(this.camera.position),position.distanceToSquared(ahead)+3,position.distanceToSquared(predicted)+2)-(retained.has(index)?2:0)-(position.isCorner?4:0)})).sort((a,b)=>a.distance-b.distance).slice(0,this.lights.length);
+      const wanted=new Set(nearest.map(lamp=>lamp.index)),used=new Set(this.lights.filter(light=>wanted.has(light.userData.fixture)).map(light=>light.userData.fixture));
+      for(const light of this.lights){if(wanted.has(light.userData.fixture))continue;const lamp=nearest.find(lamp=>!used.has(lamp.index));if(!lamp){light.visible=false;continue;}used.add(lamp.index);light.visible=true;light.userData.fixture=lamp.index;light.intensity=lamp.position.strength??(lamp.position.isCorner?14:10);light.distance=lamp.position.reach??6.2;light.angle=lamp.position.angle??Math.PI/3.1;light.color.setHex(lamp.position.warmth??0xffd29f);light.position.copy(lamp.position);light.target.position.copy(lamp.position);light.target.position.y=0;light.target.position.x+=lamp.position.aimX??0;light.target.position.z+=lamp.position.aimZ??0;light.shadow.needsUpdate=true;}
+    }
     this.renderer.render(this.scene,this.camera);this.drawScare(game,time);
   }
 }

@@ -1,10 +1,11 @@
+import {MusicDirector,prepareScore} from './music.js';
 const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 export function proximityMix(distance,occluded=false){
   const near=clamp(1-distance/7.5),presence=clamp(1-distance/10);
   return {heartGain:.38*near*near,heartInterval:60/(62+94*near),footGain:.66*presence**1.35*(occluded?.62:1),voiceGain:.29*near*(occluded?.72:1)};
 }
 export class Sound {
-  constructor(){this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voiceClock=2;this.voices=new Set();}
+  constructor(){this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voiceClock=2;this.voices=new Set();this.score=prepareScore();this.musicVolume=.65;}
   unlock(){try{if(!this.ctx){
     this.ctx=new(window.AudioContext||window.webkitAudioContext)();
     this.master=this.ctx.createGain();this.master.gain.value=this.muted?0:.8;
@@ -12,14 +13,16 @@ export class Sound {
     this.master.connect(limiter).connect(this.ctx.destination);this.output=limiter;
     this.threat=this.ctx.createGain();this.threat.gain.value=0;this.threat.connect(this.master);
     this.effects=this.ctx.createGain();this.effects.connect(this.master);
+    this.music=new MusicDirector(this.ctx,this.master,this.score);this.music.setVolume(this.musicVolume);this.music.setActive(this.playing&&!this.muted);
     this.noise=this.ctx.createBuffer(1,this.ctx.sampleRate*1.4,this.ctx.sampleRate);
     const n=this.noise.getChannelData(0);let last=0;for(let i=0;i<n.length;i++){last=.75*last+(Math.random()*2-1)*.25;n[i]=last*2;}
-    this.ambient=this.ctx.createGain();this.ambient.gain.value=.018;this.ambient.connect(this.threat);
+    this.ambient=this.ctx.createGain();this.ambient.gain.value=.008;this.ambient.connect(this.threat);
     for(const f of [42,63.18]){const osc=this.ctx.createOscillator();osc.type='sine';osc.frequency.value=f;osc.connect(this.ambient);osc.start();}
   }this.ctx.resume().catch(()=>{});}catch{}}
-  setPlaying(value){if(value===this.playing)return;this.playing=value;if(this.ctx)this.threat.gain.setTargetAtTime(value?1:0,this.ctx.currentTime,.035);if(!value){this.heartClock=0;this.voiceClock=1.5;}}
+  setPlaying(value){if(value===this.playing)return;this.playing=value;this.music?.setActive(value&&!this.muted);if(this.ctx)this.threat.gain.setTargetAtTime(value?1:0,this.ctx.currentTime,.035);if(!value){this.heartClock=0;this.voiceClock=1.5;}}
   setPaused(value){if(this.ctx)this.effects.gain.setTargetAtTime(value?0:1,this.ctx.currentTime,.015);}
-  toggle(){this.muted=!this.muted;if(this.ctx)this.master.gain.setTargetAtTime(this.muted?0:.8,this.ctx.currentTime,.025);return this.muted;}
+  toggle(){this.muted=!this.muted;if(this.ctx)this.master.gain.setTargetAtTime(this.muted?0:.8,this.ctx.currentTime,.025);this.music?.setActive(this.playing&&!this.muted);return this.muted;}
+  setMusicVolume(value){this.musicVolume=clamp(value);this.music?.setVolume(this.musicVolume);}
   ready(){return this.ctx&&this.ctx.state==='running'&&!this.muted;}
   track(source,nodes,end){this.voices.add(source);source.onended=()=>{this.voices.delete(source);for(const n of [source,...nodes])n.disconnect();};source.stop(end);}
   tone(freq,duration=.18,type='sine',volume=.16,delay=0,pan=0,bus=this.effects,endFrequency=freq){
@@ -56,6 +59,7 @@ export class Sound {
     }
   }
   event(name,count=0){
+    if(name==='start'||name==='respawn')this.music?.reset();
     if(name==='collect'){const f=[660,740,830,988,1108,1244,1320,1480][count%8];this.tone(f,.12,'triangle',.085);this.tone(f*1.5,.09,'sine',.02,.025);}
     if(name==='unlock')[165,220,165,220].forEach((f,i)=>this.tone(f,.3,'triangle',.1,i*.2));
     if(name==='won')[330,440,554,660].forEach((f,i)=>this.tone(f,.6,'sine',.12,i*.16));
@@ -65,6 +69,7 @@ export class Sound {
   }
   update(dt,speed,d,pan,occluded,escape,enemySpeed=0){
     if(!this.playing)return;
+    this.music?.update(dt,d,occluded,escape);
     const mix=proximityMix(d,occluded);
     if(speed>.05){this.stride+=speed*2.4*dt;if(this.stride>=2.1){this.stride%=2.1;this.foot++;this.step(.105,(this.foot%2?1:-1)*.15);}}else this.stride=1.5;
     if(enemySpeed>.02){this.enemyStride+=enemySpeed*2.4*dt;if(this.enemyStride>=1.65){this.enemyStride%=1.65;if(mix.footGain>.01)this.step(mix.footGain,pan,true);}}

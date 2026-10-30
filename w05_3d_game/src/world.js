@@ -1,3 +1,4 @@
+import {DEFAULT_TUNING,MOVEMENT_KEYS} from './tuning.js';
 // Positions use cell units. Rendering alone converts them into metres.
 export const MAP = [
   '###############',
@@ -19,15 +20,16 @@ export const MAP = [
 export const START = { x: 1, z: 1 };
 export const ENEMY_START = { x: 12, z: 13 };
 // The trigger is at the entrance door, separate from the respawn position.
-export const EXIT = { x: .72, z: 1 };
+export const EXIT = { x: .86, z: 1 };
+export const CELL_SIZE=2.4;
+export const wallInset=(width=DEFAULT_TUNING.corridorWidth)=>(CELL_SIZE-width)/(2*CELL_SIZE);
 // Continuous pickup trails turn navigating the maze into the collection loop.
 export const SHARDS = MAP.flatMap((row, z) => [...row].flatMap((tile, x) =>
   tile !== '#' && !(x === START.x && z === START.z) ? [{ x, z }] : []));
 export const RULES = Object.freeze({
-  playerSpeed: 1.45, sprintSpeed: 2.5, acceleration: 26,
-  enemySpeed: 1.85, escapeEnemySpeed: 2.15, playerRadius: .145,
+  ...Object.fromEntries(MOVEMENT_KEYS.map(key=>[key,DEFAULT_TUNING[key]])),
   enemyRadius: .18, collectRadius: .43, lives: 3,
-  caughtSeconds: 1.1, respawnSeconds: 1.4, exitRadius: .16, enemyDelay: 3.2,
+  caughtSeconds: 1.1, respawnSeconds: 1.4, exitRadius: .08, enemyDelay: 3.2,
 });
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 export const key = p => `${p.x},${p.z}`;

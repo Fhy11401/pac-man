@@ -1,4 +1,18 @@
 export const MOUSE_RADIANS_PER_PIXEL=.00165;
+// Resist slow strokes more than fast turns. No queued rotation, dead zone or inertia.
+export class MouseResistance {
+  constructor(){this.reset();}
+  reset(){this.lastTime=null;}
+  apply(delta,time,strength){
+    if(!delta||!Number.isFinite(delta.x)||!Number.isFinite(delta.y)){this.reset();return null;}
+    const elapsed=this.lastTime===null?8:time-this.lastTime;
+    this.lastTime=Number.isFinite(time)?time:null;
+    const dt=Number.isFinite(elapsed)&&elapsed>0&&elapsed<80?Math.max(.5,elapsed):8;
+    const speed=Math.hypot(delta.x,delta.y)*1000/dt;
+    const gain=1-Math.max(0,Math.min(.7,strength))/(1+speed/700);
+    return {x:delta.x*gain,y:delta.y*gain};
+  }
+}
 // Keep locked relative input separate from unlocked drag coordinates.
 // Embedded browsers can report a screen-relative movementX jump on re-entry.
 const finitePoint=e=>Number.isFinite(e.clientX)&&Number.isFinite(e.clientY);
