@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 5182);
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png':'image/png', '.jpg':'image/jpeg', '.webp':'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4' };
 const server = http.createServer((req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -20,4 +20,4 @@ const server = http.createServer((req, res) => {
   } catch { res.writeHead(404); res.end('Not found'); }
 });
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Port ${port} is already in use. Open http://127.0.0.1:${port}/ or choose PORT.` : error.message); process.exitCode = 1; });
-server.listen(port, '127.0.0.1', () => console.log(`Echo Archive ready: http://127.0.0.1:${port}/\nKeep this window open. Ctrl+C stops the server. No installation or internet required.`));
+server.listen(port, '127.0.0.1', () => console.log(`The Night Hotel ready: http://127.0.0.1:${port}/\nKeep this window open. Ctrl+C stops the server. No installation or internet required.`));

@@ -1,28 +1,18 @@
-# 配乐与替换音频
+# 永夜旅馆：用户提供的双曲配乐
 
-默认配乐由 `src/music-score.js` 为本项目原创生成，不包含《黑暗欺骗》的音频采样或旋律。四条同步循环音轨分别为 exploration（探索）、tension（接近）、chase（追逐）、escape（撤离）。生成工作在 Worker 中完成，不阻塞走路与鼠标输入。
+当前默认配置使用用户于 2026-10-30 提供的音频：
 
-距离与视线决定紧张程度；追逐状态保留 3.5 秒并平滑退场，避免拐角处反复切歌。撤离会加入更密集的高音弦乐和节奏。敌人很近时，音乐适当降低，为脚步和心跳留出空间。被抓时音乐停止，让惊吓音效单独出现；重生重新进入探索配乐。暂停、静音、重开均管理音源生命周期。
+| 距离 | 曲目 / 作者 | 游戏内文件 | 音频时长 |
+| --- | --- | --- | --- |
+| 较远 | Monkey Business — Chris Pinkston | local/monkey-business.mp3 | 约 52.51 秒 |
+| 较近 | Feeding Frenzy — Chris Pinkston | local/feeding-frenzy.mp3 | 约 59.93 秒 |
 
-## 使用你提供的本地音频
+来源分别为用户提供的 `Monkey_Business_-_Chris_Pinkston.zip` 与 `Feeding_Frenzy_-_Chris_Pinkston.zip` 内的 FLAC。以 FFmpeg 转换为 192 kbps、48 kHz、双声道 MP3，未下载其他原声，未改变旋律或剪短用户音频。曲目与录音不属于本项目原创资产。
 
-将可用于本项目的音频放入此目录下的 `local/`，然后修改 `tracks.json`。文件路径相对于 `tracks.json`；未填写、读取失败或解码失败的层仍使用默认原创音轨。MP3、WAV、OGG 的实际支持取决于浏览器。`local/` 已加入 Git 忽略，避免在提交代码时连带上传音频。
+`tracks.json` 的 `distance-pair` 模式只播放这两首完整混音，不叠加四条合成分轨。敌人进入 4 格（约 9.6 m）开始渐入第二首；离开至 5.2 格（约 12.48 m）以上保持 1.5 秒后渐回第一首，中间距离保持当前选择，避免反复切换。交叉渐变约一秒，播放位置连续，各自按文件时长循环。距离判定不因隔墙突然换曲；屏幕红光仍遵循墙体遮挡。
 
-示例（文件需自行提供，仓库没有这些音频）：
+极近距离略降低音乐，为脚步和心跳让出空间。暂停/静音/死亡停止音源，恢复继续之前位置；重生/重开重置。设置中的背景音乐音量继续有效。解码一次后复用，不在移动循环里请求音频；如果任一文件不可读取或解码，整组退回原有原创合成配乐，避免只加载一首或叠加两套配乐。
 
-```json
-{
-  "exploration": "./local/exploration.mp3",
-  "chase": "./local/chase.mp3",
-  "escape": "./local/escape.mp3"
-}
-```
+这两份用户提供的音频随当前个人分支一并保存。后续分发应保留作者署名，并按相应音乐授权处理。
 
-各层独立循环和渐变，最好使用剪好循环点、音量相近的版本。若使用完整混音而非分轨，建议把未替换层的影响纳入试听；开发阶段可在 `MusicState.update` 调整各层比例。配置仅接受当前站点的 URL，不加载第三方音乐服务。
-
-## 本轮查阅的原声来源
-
-- [Glowstick 官方发布：Monkey Business](https://www.youtube.com/watch?v=OkItmL-UJOw)，曲目说明署名 Chris Pinkston。
-- [Dark Deception: Chapters 1–3 原声专辑](https://darkdeception.hearnow.com/dark-deception%3A-chapters-1-3)，含 Monkey Business、Feeding Frenzy、Going Up 等曲目。
-
-上述链接仅用于查阅与试听；本游戏没有下载或打包其中的原声录音。现在的默认配乐是原创替代方案，不应标注为《黑暗欺骗》官方音乐。
+历史原声来源链接：[Monkey Business 官方曲目](https://www.youtube.com/watch?v=OkItmL-UJOw)、[Chapters 1–3 原声专辑](https://darkdeception.hearnow.com/dark-deception%3A-chapters-1-3)。本次实际接入来源是用户的本地 ZIP。

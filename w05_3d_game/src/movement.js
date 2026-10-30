@@ -37,8 +37,10 @@ export function slideMove(start,delta,radius,width){
     let first=null;
     const minX=Math.floor(Math.min(p.x,p.x+remaining.x))-1,maxX=Math.ceil(Math.max(p.x,p.x+remaining.x))+1;
     const minZ=Math.floor(Math.min(p.z,p.z+remaining.z))-1,maxZ=Math.ceil(Math.max(p.z,p.z+remaining.z))+1;
+    const reach=half+radius+skin,lowX=Math.min(p.x,p.x+remaining.x),highX=Math.max(p.x,p.x+remaining.x),lowZ=Math.min(p.z,p.z+remaining.z),highZ=Math.max(p.z,p.z+remaining.z);
     for(let z=minZ;z<=maxZ;z++)for(let x=minX;x<=maxX;x++){
-      if(isOpen(x,z))continue;const hit=sweepWall(p,remaining,x,z,half,radius+skin);
+      if(isOpen(x,z)||highX<x-reach||lowX>x+reach||highZ<z-reach||lowZ>z+reach)continue;
+      const hit=sweepWall(p,remaining,x,z,half,radius+skin);
       if(hit&&(!first||hit.time<first.time))first=hit;
     }
     if(!first){p={x:p.x+remaining.x,z:p.z+remaining.z};path.push(p);break;}
@@ -48,6 +50,15 @@ export function slideMove(start,delta,radius,width){
     if(inward<0){remaining.x-=inward*first.nx;remaining.z-=inward*first.nz;}
   }
   return {position:p,path,contacts};
+}
+
+// Keyboard acceleration stays in the player's frame of reference when looking around.
+// The swept collision solver still receives world-space velocity and checks the entire path.
+export function steerVelocity(velocity,previousHeading,heading,amount=1){
+  if(!Number.isFinite(previousHeading)||!Number.isFinite(heading))return velocity;
+  const delta=Math.atan2(Math.sin(heading-previousHeading),Math.cos(heading-previousHeading))*Math.max(0,Math.min(1,amount));
+  const c=Math.cos(delta),s=Math.sin(delta);
+  return {x:velocity.x*c+velocity.z*s,z:velocity.z*c-velocity.x*s};
 }
 
 export function movementVelocity(current,input,tuning,dt){

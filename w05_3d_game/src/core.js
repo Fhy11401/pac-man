@@ -1,13 +1,27 @@
-import { START, ENEMY_START, EXIT, SHARDS, RULES, distance, cell, isOpen, pathTo,wallInset } from './world.js';
+import { MAP,START, ENEMY_START, EXIT, SHARDS, RULES, distance, cell, isOpen, pathTo,wallInset } from './world.js';
 import {MOVEMENT_KEYS} from './tuning.js';
-import {movementVelocity,slideMove} from './movement.js';
+import {movementVelocity,slideMove,steerVelocity} from './movement.js';
+const mapWidth=MAP[0].length,shardByCell=new Int16Array(mapWidth*MAP.length).fill(-1);
+SHARDS.forEach((p,index)=>shardByCell[p.z*mapWidth+p.x]=index);
+
+function collectAlongTravel(game,travel){
+  let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;
+  for(const point of travel){minX=Math.min(minX,point.x);maxX=Math.max(maxX,point.x);minZ=Math.min(minZ,point.z);maxZ=Math.max(maxZ,point.z);}
+  // Only cells touched by this small movement can contain a new pickup.
+  for(let z=Math.max(0,Math.floor(minZ+.5));z<=Math.min(MAP.length-1,Math.floor(maxZ+.5));z++)for(let x=Math.max(0,Math.floor(minX+.5));x<=Math.min(mapWidth-1,Math.floor(maxX+.5));x++){
+    const index=shardByCell[z*mapWidth+x];if(index<0||game.collected.has(index))continue;
+    for(let leg=1;leg<travel.length;leg++)if(crossesPickupCell(travel[leg-1],travel[leg],SHARDS[index])){
+      game.collected.add(index);game.events.push('collect');if(game.collected.size===SHARDS.length)game.events.push('unlock');break;
+    }
+  }
+}
 
 // No demo flag here. Every controller is subject to these exact rules.
 export function createGame(tuning={}) {
   return { tuning: Object.fromEntries(MOVEMENT_KEYS.map(key=>[key,tuning[key]??RULES[key]])), player: { ...START }, enemy: { ...ENEMY_START }, enemyNext: null,
     collected: new Set(), lives: RULES.lives, phase: 'playing',
     elapsed: 0, respawn: 0, caught: 0, deaths: 0, events: [], enemyDelay: RULES.enemyDelay,
-    moveSpeed: 0, sprinting: false, motionVelocity:{x:0,z:0},playerVelocity: { x: 0, z: 0 }, enemyVelocity: { x: 0, z: 0 } };
+    moveSpeed: 0, sprinting: false, moveHeading:null, motionVelocity:{x:0,z:0},playerVelocity: { x: 0, z: 0 }, enemyVelocity: { x: 0, z: 0 } };
 }
 export function blocked(p, radius = RULES.playerRadius,width=RULES.corridorWidth) {
   const c = cell(p);
@@ -22,6 +36,8 @@ export function blocked(p, radius = RULES.playerRadius,width=RULES.corridorWidth
 }
 function movePlayer(game, input, dt) {
   const length = Math.hypot(input.x, input.z);
+  if(length>.001)game.motionVelocity=steerVelocity(game.motionVelocity,game.moveHeading,input.heading,game.tuning.turnFollow);
+  game.moveHeading=Number.isFinite(input.heading)?input.heading:null;
   game.sprinting = Boolean(input.run && length > .001);
   const velocity=movementVelocity(game.motionVelocity,input,game.tuning,dt);
   const before = { ...game.player };
@@ -70,6 +86,7 @@ function loseLife(game) {
   game.lives--; game.deaths++; game.events.push('hit');
   game.moveSpeed = 0; game.sprinting = false;
   game.motionVelocity={x:0,z:0};
+  game.moveHeading=null;
   game.playerVelocity = { x: 0, z: 0 }; game.enemyVelocity = { x: 0, z: 0 };
   // Keep the actual contact position visible until the scare has faded to black.
   game.phase = 'caught'; game.caught = RULES.caughtSeconds;
@@ -99,12 +116,7 @@ export function tick(game, input, dt) {
     game.elapsed += step;
     const travel=movePlayer(game, input, step);
     movedX+=travel.at(-1).x-travel[0].x;movedZ+=travel.at(-1).z-travel[0].z;movedTime+=step;
-    SHARDS.forEach((p, index) => {
-      if (!game.collected.has(index) && travel.slice(1).some((end,i)=>crossesPickupCell(travel[i],end,p))) {
-        game.collected.add(index); game.events.push('collect');
-        if (game.collected.size === SHARDS.length) game.events.push('unlock');
-      }
-    });
+    collectAlongTravel(game,travel);
     moveEnemy(game, step);
     if (distance(game.player, game.enemy) < game.tuning.playerRadius + RULES.enemyRadius) { loseLife(game); break; }
     if (game.collected.size === SHARDS.length && distance(game.player, EXIT) < RULES.exitRadius) {

@@ -1,1 +1,5 @@
-{}
+{
+  "mode": "distance-pair",
+  "far": "./local/monkey-business.mp3",
+  "near": "./local/feeding-frenzy.mp3"
+}

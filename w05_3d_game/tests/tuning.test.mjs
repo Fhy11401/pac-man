@@ -27,10 +27,10 @@ test('Per-run speeds apply to walking and both pursuit stages without changing d
  normal.tuning.enemySpeed=3;assert.equal(escape.tuning.enemySpeed,2.2);assert.equal(fresh.tuning.enemySpeed,2.05);
 });
 
-test('Mouse resistance preserves tiny input, direction and fast turns without drift',()=>{
+test('Opt-in mouse speed gain preserves tiny input, direction and fast turns without drift',()=>{
  const friction=new MouseResistance();
- const slow=friction.apply({x:.25,y:-.125},0,.28);friction.reset();
- const fast=friction.apply({x:80,y:-40},0,.28);
+ const slow=friction.apply({x:.25,y:-.125},0,.28,1);friction.reset();
+ const fast=friction.apply({x:80,y:-40},0,.28,1);
  assert.ok(slow.x>0&&slow.x<.25);assert.equal(slow.y/slow.x,-.5);
  assert.ok(fast.x/80>slow.x/.25);assert.ok(fast.x<80);
  assert.deepEqual(friction.apply({x:0,y:0},8,.28),{x:0,y:0});

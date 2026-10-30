@@ -1,5 +1,17 @@
 import {STEMS} from './music-score.js';
 const clamp=v=>Math.max(0,Math.min(1,v));
+export class DistanceMusicState {
+  constructor(){this.reset();}
+  reset(){this.near=false;this.hold=0;this.blend=0;}
+  update(dt,distance){
+    dt=Math.max(0,Math.min(.1,dt));
+    if(distance<=4){this.near=true;this.hold=1.5;}
+    else if(distance>=5.2){this.hold=Math.max(0,this.hold-dt);if(this.hold===0)this.near=false;}
+    this.blend+=((this.near?1:0)-this.blend)*(1-Math.exp(-dt*3.2));
+    const level=.45*(1-clamp((3.2-distance)/2.6)*.25);
+    return {far:level*(1-this.blend),near:level*this.blend};
+  }
+}
 
 export class MusicState {
   constructor(){this.reset();}
@@ -29,7 +41,7 @@ export function prepareScore(){
 
 export class MusicDirector {
   constructor(context,output,prepared){
-    this.ctx=context;this.state=new MusicState();this.active=false;this.offset=0;this.startedAt=0;this.sources=[];this.buffers={};this.volume=.65;
+    this.ctx=context;this.state=new MusicState();this.keys=STEMS;this.loaded=false;this.active=false;this.offset=0;this.startedAt=0;this.sources=[];this.buffers={};this.volume=.65;
     this.bus=context.createGain();this.bus.gain.value=0;this.bus.connect(output);
     this.gains=Object.fromEntries(STEMS.map(key=>{const node=context.createGain();node.gain.value=key==='exploration'?.48:0;node.connect(this.bus);return[key,node];}));
     this.ready=prepared.then(async score=>{
@@ -39,6 +51,19 @@ export class MusicDirector {
         const manifestURL=new URL('../assets/music/tracks.json',import.meta.url),response=await fetch(manifestURL);
         if(!response.ok)return;
         const manifest=await response.json(),loaded={};
+        if(manifest.mode==='distance-pair'){
+          await Promise.all(['far','near'].map(async key=>{
+            if(typeof manifest[key]!=='string')return;
+            const url=new URL(manifest[key],manifestURL);if(url.origin!==manifestURL.origin)return;
+            try{const file=await fetch(url);if(file.ok)loaded[key]=await context.decodeAudioData(await file.arrayBuffer());}catch{}
+          }));
+          if(loaded.far&&loaded.near){
+            this.keys=['far','near'];this.buffers=loaded;this.state=new DistanceMusicState();
+            for(const gain of Object.values(this.gains))gain.disconnect();
+            this.gains=Object.fromEntries(this.keys.map(key=>{const node=context.createGain();node.gain.value=key==='far'?.45:0;node.connect(this.bus);return [key,node];}));
+          }
+          return;
+        }
         await Promise.all(STEMS.map(async key=>{
           if(typeof manifest[key]!=='string')return;
           const url=new URL(manifest[key],manifestURL);
@@ -46,13 +71,13 @@ export class MusicDirector {
           try{const file=await fetch(url);if(file.ok)loaded[key]=await context.decodeAudioData(await file.arrayBuffer());}catch{}
         }));
         Object.assign(this.buffers,loaded);
-      }catch{}finally{if(this.active)this.startSources();}
+      }catch{}finally{this.loaded=true;if(this.active)this.startSources();}
     });
   }
   startSources(){
-    if(this.sources.length||!Object.keys(this.buffers).length)return;
+    if(!this.loaded||this.sources.length||!Object.keys(this.buffers).length)return;
     this.startedAt=this.ctx.currentTime;
-    for(const key of STEMS){const buffer=this.buffers[key];if(!buffer)continue;const source=this.ctx.createBufferSource(),gate=this.ctx.createGain();source.buffer=buffer;source.loop=true;source.connect(gate).connect(this.gains[key]);source.onended=()=>{source.disconnect();gate.disconnect();};source.start(this.startedAt,this.offset%buffer.duration);this.sources.push({source,gate});}
+    for(const key of this.keys){const buffer=this.buffers[key];if(!buffer)continue;const source=this.ctx.createBufferSource(),gate=this.ctx.createGain();source.buffer=buffer;source.loop=true;source.connect(gate).connect(this.gains[key]);source.onended=()=>{source.disconnect();gate.disconnect();};source.start(this.startedAt,this.offset%buffer.duration);this.sources.push({key,source,gate});}
   }
   stopSources(){
     if(!this.sources.length)return;
@@ -66,6 +91,6 @@ export class MusicDirector {
     if(active)this.startSources();else this.stopSources();
   }
   setVolume(value){this.volume=clamp(value);if(this.active)this.bus.gain.setTargetAtTime(this.volume,this.ctx.currentTime,.08);}
-  reset(){this.stopSources();this.offset=0;this.state.reset();for(const key of STEMS){const gain=this.gains[key].gain;gain.cancelScheduledValues(this.ctx.currentTime);gain.setValueAtTime(key==='exploration'?.48:0,this.ctx.currentTime);}if(this.active)this.startSources();}
-  update(dt,distance,occluded,escape){if(!this.active)return;const target=this.state.update(dt,distance,occluded,escape);for(const key of STEMS)this.gains[key].gain.setTargetAtTime(target[key],this.ctx.currentTime,.06);}
+  reset(){this.stopSources();this.offset=0;this.state.reset();for(const key of this.keys){const gain=this.gains[key].gain;gain.cancelScheduledValues(this.ctx.currentTime);gain.setValueAtTime(key==='exploration'?.48:key==='far'?.45:0,this.ctx.currentTime);}if(this.active)this.startSources();}
+  update(dt,distance,occluded,escape){if(!this.active)return;const target=this.state.update(dt,distance,occluded,escape);for(const key of this.keys)this.gains[key].gain.setTargetAtTime(target[key],this.ctx.currentTime,.06);}
 }

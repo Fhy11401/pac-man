@@ -67,11 +67,12 @@ export class Sound {
     if(name==='tablet')this.noiseBurst(.1,0,.18,900,this.effects,0,350);
     if(name==='start'||name==='respawn'){this.stride=0;this.enemyStride=0;this.heartClock=0;this.voiceClock=1.4;this.tone(220,.25,'sine',.07);}
   }
-  update(dt,speed,d,pan,occluded,escape,enemySpeed=0){
+  update(dt,speed,d,pan,occluded,escape,enemySpeed=0,playerSteps=0){
     if(!this.playing)return;
     this.music?.update(dt,d,occluded,escape);
     const mix=proximityMix(d,occluded);
-    if(speed>.05){this.stride+=speed*2.4*dt;if(this.stride>=2.1){this.stride%=2.1;this.foot++;this.step(.105,(this.foot%2?1:-1)*.15);}}else this.stride=1.5;
+    // Camera foot plants and audible footfalls share a single distance clock.
+    for(let i=0;i<playerSteps;i++){this.foot++;this.step(.105,(this.foot%2?1:-1)*.15);}
     if(enemySpeed>.02){this.enemyStride+=enemySpeed*2.4*dt;if(this.enemyStride>=1.65){this.enemyStride%=1.65;if(mix.footGain>.01)this.step(mix.footGain,pan,true);}}
     this.heartClock-=dt;if(mix.heartGain>.001&&this.heartClock<=0){this.heartbeat(mix.heartGain);this.heartClock=mix.heartInterval;}
     this.voiceClock-=dt;if(mix.voiceGain>.025&&enemySpeed>.02&&this.voiceClock<=0){this.growl(mix.voiceGain,pan);this.voiceClock=escape?3.8:4.6+Math.random()*1.6;}

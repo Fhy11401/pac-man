@@ -1,4 +1,6 @@
 node_modules/
 .DS_Store
 *.log
-assets/music/local/
+assets/music/local/*
+!assets/music/local/monkey-business.mp3
+!assets/music/local/feeding-frenzy.mp3
