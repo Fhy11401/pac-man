@@ -34,6 +34,16 @@ test('Developer duration changes turn timing while keeping 180 degrees and eased
   assert.ok(Math.abs(turn.step(duration/2)-Math.PI/2)<1e-12);assert.equal(turn.active,false);
  }
 });
+
+test('Quick turn eases angular acceleration into and out of the animation',()=>{
+ for(const duration of [.16,.32,.6]){
+  const turn=new QuickTurn(),dt=duration/1000;turn.start(duration);
+  const first=turn.step(dt);assert.ok(first/(dt*dt)<2,'initial acceleration stays close to rest');
+  turn.step(duration-2*dt);const last=turn.step(dt);
+  assert.ok(Math.abs(first-last)<1e-12,'the landing is as gentle as the launch');
+  assert.ok(Math.abs(turn.angle-Math.PI)<1e-12);assert.equal(turn.active,false);
+ }
+});
 test('Developer map magnification scales the local view without moving its center or changing full map',()=>{
  const p={x:4,z:5};
  for(const scale of [1.4,2.1,3]){

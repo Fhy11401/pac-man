@@ -1,6 +1,26 @@
-node_modules/
-.DS_Store
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
+**/__pycache__/
+*.py[cod]
+
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+
+# Local work and recordings
+**/qa/
+**/qa-ui/
+**/playwright-report/
+**/test-results/
+**/backups/
+**/private-notes/
+**/transcripts/
+**/PROMPTS.md
 *.log
-assets/music/local/*
-!assets/music/local/monkey-business.mp3
-!assets/music/local/feeding-frenzy.mp3
+*.zip
+.DS_Store
+Thumbs.db

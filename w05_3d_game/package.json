@@ -1,6 +1,6 @@
 {
   "name": "echo-archive",
-  "version": "2.7.2",
+  "version": "2.8.1",
   "private": true,
   "type": "module",
   "description": "A local first-person maze collection game with shared human/demo rules",

@@ -26,7 +26,8 @@ for(const group of TUNING_GROUPS){
  if(!group.id)$('developer-fields').insertBefore(section,$('developer-map-options'));
 }
 let game=createGame(settings),bot=new DemoController(),view,screen='menu',mode='human',yaw=-Math.PI/2,pitch=0,keys=new Set(),hadPointerLock=false;
-let renderDirty=true;
+let renderDirty=true,sceneReady=false;
+const startLabel=$('start-button').innerHTML,startControls=['start-button','demo-restart','restart-pause','restart-result'];
 let lastFrame=performance.now(),sceneTime=0,uiTimer=0,toastUntil=0,resultDelay=0,demoClock=0,pickupUntil=0;
 const time=v=>`${String(Math.floor(v/60)).padStart(2,'0')}:${String(Math.floor(v%60)).padStart(2,'0')}`,hide=(id,v)=>$(id).hidden=v;
 function announce(s,ms=2600){$('toast').textContent=s;toastUntil=performance.now()+ms;$('toast').classList.add('show');}
@@ -43,8 +44,9 @@ function updateScreen(){
   if(screen==='paused'||screen==='settings')$('resume-button').focus();if(screen==='result')$('restart-result').focus();if(screen==='developer'){$('fov-setting').focus({preventScroll:true});$('developer-panel').querySelector('.modal-content').scrollTop=0;}
 }
 function start(nextMode='human'){
+  if(!sceneReady)return;
   quickTurn.cancel();
-  rebuildCorridors();mode=nextMode;game=createGame(settings);bot=new DemoController();yaw=-Math.PI/2;pitch=0;keys.clear();mouseLook.cancelDrag();mouseResistance.reset();demoClock=0;resultDelay=0;screen='playing';tabletShown=true;scareLook=null;sound.unlock();sound.setPaused(false);sound.event('start');$('toast').classList.remove('show');updateScreen();updateHUD();if(mode==='human')requestPointer();else releasePointer();lastFrame=performance.now();
+  rebuildCorridors();if(!sceneReady)return;mode=nextMode;game=createGame(settings);bot=new DemoController();yaw=-Math.PI/2;pitch=0;keys.clear();mouseLook.cancelDrag();mouseResistance.reset();demoClock=0;resultDelay=0;screen='playing';tabletShown=true;scareLook=null;sound.unlock();sound.setPaused(false);sound.event('start');$('toast').classList.remove('show');updateScreen();updateHUD();if(mode==='human')requestPointer();else releasePointer();lastFrame=performance.now();
 }
 function menu(message='电脑键盘与鼠标游玩 · 建议佩戴耳机'){
   quickTurn.cancel();
@@ -72,9 +74,23 @@ function manualInput(dt){
   return{x:-Math.sin(yaw)*forward+Math.cos(yaw)*side,z:-Math.cos(yaw)*forward-Math.sin(yaw)*side,heading:yaw,run:settings.autorun?!shift:shift};
 }
 function toggleSound(){sound.unlock();const muted=sound.toggle();$('mute-button').textContent=muted?'声音 关':'声音 开';$('mute-button').setAttribute('aria-pressed',String(muted));$('mute-button').setAttribute('aria-label',muted?'取消静音':'静音');}
+function watchViewReady(){
+  const pending=view;sceneReady=false;
+  for(const id of startControls)$(id).disabled=true;
+  $('start-button').innerHTML='<span>布置夜班中…</span><small>PREPARING THE HOTEL</small><b>…</b>';
+  pending.ready.then(()=>{
+    if(view!==pending)return;
+    sceneReady=true;renderDirty=true;
+    for(const id of startControls)$(id).disabled=false;
+    $('start-button').innerHTML=startLabel;
+  }).catch(error=>{
+    if(view!==pending)return;
+    screen='error';updateScreen();hide('error-panel',false);$('error-message').textContent=error.message;console.error(error);
+  });
+}
 function rebuildCorridors(){
   if(view.corridorWidth===settings.corridorWidth&&view.ceilingHeight===settings.ceilingHeight)return;
-  view.dispose();view=new WorldView($('scene'),settings);view.ready.then(()=>{renderDirty=true;});installLook(view.renderer.domElement);applySettings();
+  view.dispose();view=new WorldView($('scene'),settings);watchViewReady();installLook(view.renderer.domElement);applySettings();
 }
 function applySettings(){
   renderDirty=true;
@@ -123,7 +139,7 @@ $('motion-setting').checked=settings.motion;$('autorun-setting').checked=setting
 $('music-setting').oninput=e=>{settings.music=Number(e.target.value);applySettings();};
 for(const [id,k] of [['motion-setting','motion'],['autorun-setting','autorun'],['zoom-setting','zoom']])$(id).onchange=e=>{settings[k]=e.target.checked;applySettings();};
 window.addEventListener('keydown',e=>{
-  const code=e.code.toLowerCase();if(code==='keym'&&!e.repeat)toggleSound();
+  const code=e.code.toLowerCase();if(code==='keym'&&!e.repeat&&screen!=='notice'&&screen!=='error')toggleSound();
   if(code==='escape'){if(mode==='demo'&&screen==='playing')menu('Demo 已退出。你可以开始人工游玩。');else if(screen==='playing')pause();else if(['settings','developer'].includes(screen)){const back=screen==='developer'?'developer-button':'settings-button';menu();$(back).focus();}return;}
   if(code==='space'&&screen==='playing'){e.preventDefault();if(!e.repeat)toggleTablet();return;}
   if(screen==='playing'&&mode==='human'&&['keyw','keya','keys','keyd','shiftleft','shiftright','arrowleft','arrowright'].includes(code)){e.preventDefault();keys.add(code);}
@@ -140,9 +156,9 @@ function installLook(canvas){
   canvas.addEventListener('pointermove',e=>{if(canLook()&&document.pointerLockElement!==canvas)applyLook(mouseLook.drag(e),e.timeStamp);});
   canvas.addEventListener('lostpointercapture',()=>mouseLook.cancelDrag());
   canvas.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
-  window.addEventListener('pointerup',cancelDrag);window.addEventListener('pointercancel',cancelDrag);
   canvas.addEventListener('pointerleave',e=>{if(!canvas.hasPointerCapture?.(e.pointerId))cancelDrag();});
 }
+window.addEventListener('pointerup',cancelDrag);window.addEventListener('pointercancel',cancelDrag);
 window.addEventListener('mousemove',e=>{if(canLook()&&document.pointerLockElement===view?.renderer.domElement)applyLook(mouseLook.relative(e),e.timeStamp);});
 document.addEventListener('pointerlockchange',()=>{
   const locked=document.pointerLockElement===view?.renderer.domElement;mouseLook.setLocked(locked);mouseResistance.reset();
@@ -152,4 +168,4 @@ document.addEventListener('pointerlockchange',()=>{
 window.addEventListener('resize',()=>{renderDirty=true;});
 window.addEventListener('blur',()=>{keys.clear();cancelDrag();if(screen==='playing')pause('窗口失去焦点，游戏已自动暂停。');});
 document.addEventListener('visibilitychange',()=>{renderDirty=true;if(document.hidden){cancelDrag();if(screen==='playing')pause('页面已切换，游戏已自动暂停。');}});
-try{view=new WorldView($('scene'),settings);view.ready.then(()=>{renderDirty=true;});applySettings();document.querySelectorAll('.total-shards').forEach(e=>e.textContent=SHARDS.length);installLook(view.renderer.domElement);menu();screen='notice';updateScreen();requestAnimationFrame(frame);}catch(error){screen='error';updateScreen();hide('error-panel',false);$('error-message').textContent=error.message;console.error(error);}
+try{view=new WorldView($('scene'),settings);watchViewReady();applySettings();document.querySelectorAll('.total-shards').forEach(e=>e.textContent=SHARDS.length);installLook(view.renderer.domElement);menu();screen='notice';updateScreen();requestAnimationFrame(frame);}catch(error){screen='error';updateScreen();hide('error-panel',false);$('error-message').textContent=error.message;console.error(error);}

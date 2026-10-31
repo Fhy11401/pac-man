@@ -22,29 +22,26 @@ export function drawMap(canvas,game,yaw=-Math.PI/2,zoom=true,localScale=DEFAULT_
     b.clearRect(0,0,w,w);
     MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
       if(tile==='#')return;
-      b.fillStyle='#101517';b.fillRect(x*u,z*u,u+.2,u+.2);
-      b.strokeStyle='#777c7a';b.lineWidth=1.2;
+      b.fillStyle='#070707';b.fillRect(x*u,z*u,u+.2,u+.2);
+      b.strokeStyle='#aaa9a4';b.lineWidth=1.1;
       for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])if(!isOpen(x+dx,z+dz)){
         b.beginPath();if(dx){const xx=(x+(dx>0?1:0))*u;b.moveTo(xx,z*u);b.lineTo(xx,(z+1)*u);}
         else{const zz=(z+(dz>0?1:0))*u;b.moveTo(x*u,zz);b.lineTo((x+1)*u,zz);}b.stroke();
       }
     }));
-    b.shadowColor='#ce75ff';b.shadowBlur=5;b.fillStyle='#c97aee';
-    SHARDS.forEach((p,i)=>{if(!game.collected.has(i))b.fillRect((p.x+.36)*u,(p.z+.36)*u,u*.28,u*.28);});
-    b.shadowBlur=0;b.strokeStyle=game.collected.size===SHARDS.length?'#92efc7':'#c4b68e';b.lineWidth=2.5;
+    b.shadowColor='#b128e2';b.shadowBlur=2.5;b.fillStyle='#b72ddd';
+    SHARDS.forEach((p,i)=>{if(game.collected.has(i))return;b.fillRect((p.x+.35)*u,(p.z+.35)*u,u*.3,u*.3);});
+    b.shadowBlur=0;b.strokeStyle=game.collected.size===SHARDS.length?'#a2e8b4':'#c4b68e';b.lineWidth=2.5;
     b.strokeRect((EXIT.x+.22)*u,(EXIT.z+.22)*u,u*.56,u*.56);
     cache={canvas:base,game,count:game.collected.size,width:w};cacheByCanvas.set(canvas,cache);
   }
-  c.fillStyle='#050708';c.fillRect(0,0,w,w);
-  c.strokeStyle='#b7c7c804';c.lineWidth=1;
-  for(let q=0;q<w;q+=w/12){c.beginPath();c.moveTo(q,0);c.lineTo(q,w);c.moveTo(0,q);c.lineTo(w,q);c.stroke();}
+  c.fillStyle='#030303';c.fillRect(0,0,w,w);
   c.save();c.beginPath();c.rect(7,7,w-14,w-14);c.clip();
   c.translate(w/2,w/2);c.rotate(yaw);c.scale(t.scale,t.scale);c.translate(-t.anchor.x*u,-t.anchor.z*u);c.drawImage(cache.canvas,0,0);c.restore();
   const player=mapPoint(game.player,t);
-  c.save();c.translate(player.x,player.y);c.shadowColor='#f36c93';c.shadowBlur=12;
-  c.strokeStyle='#ff7eac66';c.lineWidth=1.5;c.beginPath();c.arc(0,0,11,0,Math.PI*2);c.stroke();
-  c.fillStyle='#fff3f8';c.beginPath();c.moveTo(0,-8);c.lineTo(5.5,5);c.lineTo(0,2.5);c.lineTo(-5.5,5);c.closePath();c.fill();c.restore();
-  c.strokeStyle='#9ba6a629';c.lineWidth=1;
-  for(const [x,y,sx,sy] of [[4,4,1,1],[w-4,4,-1,1],[4,w-4,1,-1],[w-4,w-4,-1,-1]]){c.beginPath();c.moveTo(x+sx*15,y);c.lineTo(x,y);c.lineTo(x,y+sy*15);c.stroke();}
+  c.save();c.translate(player.x,player.y);
+  c.fillStyle='#e1637430';c.beginPath();c.moveTo(0,0);c.arc(0,0,27,-Math.PI*.66,-Math.PI*.34);c.closePath();c.fill();
+  c.shadowColor='#f14c70';c.shadowBlur=13;c.fillStyle='#f98c9b';c.beginPath();c.arc(0,0,4.5,0,Math.PI*2);c.fill();
+  c.shadowBlur=0;c.fillStyle='#fff0dd';c.beginPath();c.arc(0,-.5,1.7,0,Math.PI*2);c.fill();c.restore();
   Object.assign(cache,{x:game.player.x,z:game.player.z,yaw,zoom,localScale});
 }

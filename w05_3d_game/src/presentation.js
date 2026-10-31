@@ -5,7 +5,7 @@ export function renderPixelRatio(width,height,dpr){return Math.min(dpr,1.6,Math.
 export const SCARE_TURN_SECONDS=.22;
 export const QUICK_TURN_SECONDS=.32;
 export function angularTurnRate(previous,yaw,dt){
-  if(previous===null||!Number.isFinite(previous)||!Number.isFinite(yaw)||dt<=0)return 0;
+  if(previous===null||!Number.isFinite(previous)||!Number.isFinite(yaw)||!Number.isFinite(dt)||dt<=0)return 0;
   return Math.min(16,Math.abs(Math.atan2(Math.sin(yaw-previous),Math.cos(yaw-previous)))/dt);
 }
 // Add each frame's angle, so live mouse input is retained instead of snapping to a stored target.
@@ -15,7 +15,8 @@ export class QuickTurn {
   step(dt){
     if(!this.active||!Number.isFinite(dt)||dt<=0)return 0;
     this.elapsed=Math.min(this.duration,this.elapsed+dt);
-    const t=this.elapsed/this.duration,angle=Math.PI*t*t*(3-2*t),delta=angle-this.angle;
+    // Zero velocity AND acceleration at both ends avoids a mechanical snap into/out of the turn.
+    const t=this.elapsed/this.duration,ease=t*t*t*(t*(t*6-15)+10),angle=Math.PI*ease,delta=angle-this.angle;
     this.angle=angle;if(t>=1)this.active=false;return delta;
   }
   cancel(){this.active=false;this.elapsed=0;this.angle=0;}

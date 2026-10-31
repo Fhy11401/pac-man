@@ -118,4 +118,5 @@ test('Turn stabilization can be disabled and angular wrap does not create a fals
  }assert.equal(plain.bob,off.bob);assert.equal(plain.pitch,off.pitch);
  assert.ok(Math.abs(angularTurnRate(Math.PI-.01,-Math.PI+.01,.02)-1)<1e-10);
  assert.equal(angularTurnRate(null,3,.02),0);assert.equal(angularTurnRate(0,3,0),0);
+ assert.equal(angularTurnRate(0,3,NaN),0);assert.equal(angularTurnRate(0,3,Infinity),0);
 });

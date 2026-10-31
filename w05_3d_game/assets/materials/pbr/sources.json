@@ -1,0 +1,88 @@
+{
+  "retrieved": "2026-10-31",
+  "provider": "ambientCG / Lennart Demes",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://docs.ambientcg.com/license/",
+  "assets": [
+    {
+      "id": "PaintedPlaster017",
+      "page": "https://ambientcg.com/a/PaintedPlaster017",
+      "download": "https://ambientcg.com/get?file=PaintedPlaster017_1K-JPG.zip",
+      "technique": "Surface Photogrammetry",
+      "files": [
+        {
+          "name": "PaintedPlaster017_1K-JPG_Color.jpg",
+          "bytes": 378542,
+          "sha256": "ed8a69a6437de9d41d2cf380f7e6a216232fc4754f256c3405985c857547ffef",
+          "width": 1024,
+          "height": 512
+        },
+        {
+          "name": "PaintedPlaster017_1K-JPG_NormalGL.jpg",
+          "bytes": 1115299,
+          "sha256": "1bef1887c10e1ce104be1a557e4dbd7634ef6d5ece6e3b4237dab2d0962f57fa",
+          "width": 1024,
+          "height": 512
+        },
+        {
+          "name": "PaintedPlaster017_1K-JPG_Roughness.jpg",
+          "bytes": 193304,
+          "sha256": "a83ecc2ba5b9d80bb9a27381f3389ccdb20c77ef6358b92f3d11455403d651d8",
+          "width": 1024,
+          "height": 512
+        }
+      ]
+    },
+    {
+      "id": "Wood051",
+      "page": "https://ambientcg.com/a/Wood051",
+      "download": "https://ambientcg.com/get?file=Wood051_1K-JPG.zip",
+      "technique": "Procedural",
+      "files": [
+        {
+          "name": "Wood051_1K-JPG_Color.jpg",
+          "bytes": 871537,
+          "sha256": "f3c6c5456457e8d05c1fee4d2f186f41d0aea2b8a06859b69ce2934e11aa8798",
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "name": "Wood051_1K-JPG_NormalGL.jpg",
+          "bytes": 1583401,
+          "sha256": "9078dc50c43b55831ae322460fc96b62df68c7a148400bd7755ab2788fec1708",
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "name": "Wood051_1K-JPG_Roughness.jpg",
+          "bytes": 680793,
+          "sha256": "b5736b940d721b49922cb14eebd52fd34f134b7ef99331ecf28565ce40358098",
+          "width": 1024,
+          "height": 1024
+        }
+      ]
+    },
+    {
+      "id": "Fabric030",
+      "page": "https://ambientcg.com/a/Fabric030",
+      "download": "https://ambientcg.com/get?file=Fabric030_1K-JPG.zip",
+      "technique": "Approximation",
+      "files": [
+        {
+          "name": "Fabric030_1K-JPG_NormalGL.jpg",
+          "bytes": 2682952,
+          "sha256": "c9a8f4ff15527af0b226b8a8840405f944c45a32c2e4462864d3b0136827e6e2",
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "name": "Fabric030_1K-JPG_Roughness.jpg",
+          "bytes": 866950,
+          "sha256": "221bf708cb614b01ae83b856376fa79fff22dc249d8a397ab0f89dd3b7fe6da6",
+          "width": 1024,
+          "height": 1024
+        }
+      ]
+    }
+  ]
+}

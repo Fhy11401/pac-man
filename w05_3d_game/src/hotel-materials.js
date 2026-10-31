@@ -44,17 +44,25 @@ export function makeHotelMaterials(assetJobs=[]){
   for(let i=0;i<18000;i++){const n=155+Math.round(random()*80);c.fillStyle=`rgb(${n},${n},${n})`;c.fillRect(random()*256,random()*256,1,1);}
   const grain=finish(image,false),paper=hotelTexture('paper'),wood=hotelTexture('wood');paper.repeat.set(3,3);
   const materials={
-    paper:new THREE.MeshStandardMaterial({map:paper,bumpMap:grain,bumpScale:.0013,roughnessMap:grain,roughness:1}),
-    wood:new THREE.MeshStandardMaterial({map:wood,bumpMap:wood,bumpScale:.0025,roughnessMap:grain,roughness:.68}),
-    panel:new THREE.MeshStandardMaterial({color:0x777365,bumpMap:grain,bumpScale:.002,roughness:.82}),
-    trim:new THREE.MeshStandardMaterial({color:0xaba18a,bumpMap:grain,bumpScale:.001,roughness:.64}),
-    ceiling:new THREE.MeshStandardMaterial({color:0x777568,bumpMap:grain,bumpScale:.001,roughness:.5}),
-    brass:new THREE.MeshStandardMaterial({color:0x9c855d,metalness:.45,roughnessMap:grain,roughness:.58}),
+    paper:new THREE.MeshStandardMaterial({map:paper,color:0xd0cec5,roughness:.88,envMapIntensity:.08}),
+    wood:new THREE.MeshPhysicalMaterial({map:wood,roughness:.78,clearcoat:.12,clearcoatRoughness:.46,envMapIntensity:.30}),
+    panel:new THREE.MeshStandardMaterial({color:0xb8b9b6,roughness:.9,envMapIntensity:.13}),
+    trim:new THREE.MeshStandardMaterial({color:0xbdb5a1,bumpMap:grain,bumpScale:.0005,roughness:.40,envMapIntensity:.32}),
+    ceiling:new THREE.MeshStandardMaterial({color:0xb4ac98,roughness:.88,envMapIntensity:.12}),
+    brass:new THREE.MeshStandardMaterial({color:0xb9a376,metalness:.72,roughnessMap:grain,roughness:.39,envMapIntensity:.65}),
     black:new THREE.MeshStandardMaterial({color:0x171314,roughness:.94}),
     glow:new THREE.MeshBasicMaterial({color:0xffecc4,toneMapped:false}),
-    cloth:new THREE.MeshStandardMaterial({color:0xc2ac87,bumpMap:grain,bumpScale:.0025,roughness:1,emissive:0x7a4e27,emissiveIntensity:.055}),
+    cloth:new THREE.MeshStandardMaterial({color:0xc2ac87,roughness:1,emissive:0x7a4e27,emissiveIntensity:.055}),
   };
-  assetJobs.push(applyHotelAsset(materials.paper,'paper',{repeat:[3,3],bump:.0015}),applyHotelAsset(materials.wood,'wood',{repeat:[1,1],bump:.0025}));
+  // Plaster's source is 1024 x 512 (2:1): use ~2 m x 1 m tiles without stretching its cracks.
+  // Micro-weave normal/roughness tile independently, so the ornate print never becomes a bump map.
+  assetJobs.push(
+    applyHotelAsset(materials.paper,'paper',{repeat:[2.0,1.5],normalScale:.10}),
+    applyHotelAsset(materials.wood,'referenceWood',{repeat:[1.6,1.1]}),
+    applyHotelAsset(materials.panel,'referencePlaster',{repeat:[2,1],detailRepeat:[1.6,1],normalScale:.15}),
+    applyHotelAsset(materials.ceiling,'referencePlaster',{repeat:[18,18],detailRepeat:[18,36],normalScale:.10}),
+    applyHotelAsset(materials.cloth,'fabric',{repeat:[2,2],normalScale:.18}),
+  );
   return materials;
 }
 
