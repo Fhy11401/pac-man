@@ -1,6 +1,6 @@
 import {DEFAULT_TUNING} from './tuning.js';
 import * as THREE from '../vendor/three.module.js';
-import { MAP, SHARDS, EXIT, ENEMY_START, isOpen, RULES,CELL_SIZE,wallInset } from './world.js';
+import { MAP, SHARDS, EXIT, ENEMY_START, isOpen, RULES,CELL_SIZE,wallInset,allTransitionWalls } from './world.js';
 import {decorateHotel} from './hotel-detail.js';
 import {hotelTexture as texture,makeHotelMaterials} from './hotel-materials.js';
 import {SCARE_TURN_SECONDS,renderPixelRatio,angularTurnRate} from './presentation.js';
@@ -9,7 +9,7 @@ import {applyHotelAsset} from './hotel-assets.js';
 import {crystalGeometry} from './crystal.js';
 import {attendantMaterials,attendantHead,createAttendant} from './enemy-model.js';
 export const UNIT = CELL_SIZE;
-const world = (x,z,y=0) => new THREE.Vector3((x-7)*UNIT,y,(z-7)*UNIT);
+const world = (x,z,y=0) => new THREE.Vector3((x+.5-MAP[0].length/2)*UNIT,y,(z+.5-MAP.length/2)*UNIT);
 function glowTexture(){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,1,32,32,32);g.addColorStop(0,'#fff');g.addColorStop(.15,'#d99cffbb');g.addColorStop(.5,'#8c3cbd30');g.addColorStop(1,'#0000');x.fillStyle=g;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
 export class WorldView {
   constructor(container,tuning=DEFAULT_TUNING){
@@ -63,9 +63,9 @@ export class WorldView {
       mat.shadowSide=THREE.DoubleSide;
       const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(UNIT+pad+2*this.wallInset*UNIT,h,UNIT+pad+2*this.wallInset*UNIT),mat,walls.length);mesh.castShadow=true;mesh.receiveShadow=true;walls.forEach((p,i)=>{dummy.position.copy(world(p.x,p.z,y));dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});this.scene.add(mesh);
     }
-    const carpet=texture('carpet');carpet.repeat.set(15,15);const floor=this.mesh(new THREE.PlaneGeometry(15*UNIT,15*UNIT),new THREE.MeshStandardMaterial({map:carpet,roughness:1}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;
+    const carpet=texture('carpet');carpet.repeat.set(15,15);const floor=this.mesh(new THREE.PlaneGeometry(MAP[0].length*UNIT,MAP.length*UNIT),new THREE.MeshStandardMaterial({map:carpet,roughness:1}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;
     this.assetJobs.push(applyHotelAsset(floor.material,'carpet',{repeat:[15,15],bump:.003}));
-    const ceiling=this.mesh(new THREE.PlaneGeometry(15*UNIT,15*UNIT),this.mat.ceiling);ceiling.rotation.x=Math.PI/2;ceiling.position.y=height;ceiling.receiveShadow=true;
+    const ceiling=this.mesh(new THREE.PlaneGeometry(MAP[0].length*UNIT,MAP.length*UNIT),this.mat.ceiling);ceiling.rotation.x=Math.PI/2;ceiling.position.y=height;ceiling.receiveShadow=true;
     this.lampPositions=[];let doorNumber=201;const shadeMaterial=this.mat.cloth;
     MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
       if(tile==='#')return;
@@ -94,6 +94,19 @@ export class WorldView {
         }
       }
     }));
+    for(const wall of allTransitionWalls){
+      const vertical=wall.a.x!==wall.b.x;
+      // Match the complete normal wall stack, including its top and bottom trims.
+      const thickness=UNIT*.38, span=UNIT+2*this.wallInset*UNIT, h=this.ceilingHeight;
+      const center=world(wall.x,wall.z);
+      const place=(mesh,y)=>{mesh.position.set(center.x,y,center.z);mesh.castShadow=true;mesh.receiveShadow=true;return mesh;};
+      place(this.box(vertical?thickness:span,h,vertical?span:thickness,this.mat.paper,0,h/2,0),h/2);
+      place(this.box(vertical?thickness+.04:span,.94,vertical?span:thickness+.04,this.mat.panel,0,.47,0),.47);
+      place(this.box(vertical?thickness+.06:span,.055,vertical?span:thickness+.06,this.mat.trim,0,.97,0),.97);
+      place(this.box(vertical?thickness+.05:span,.12,vertical?span:thickness+.05,this.mat.black,0,.06,0),.06);
+      place(this.box(vertical?thickness+.05:span,.10,vertical?span:thickness+.05,this.mat.trim,0,h-.06,0),h-.06);
+      place(this.box(vertical?thickness+.04:span,.045,vertical?span:thickness+.04,this.mat.trim,0,h-.15,0),h-.15);
+    }
   }
   batchStaticMeshes(){
     this.scene.updateMatrixWorld(true);const batches=new Map();
@@ -135,7 +148,10 @@ export class WorldView {
   }
   buildExit(){
     const height=Math.min(2.3,this.ceilingHeight-.4);
-    this.exit=new THREE.Group();this.exit.position.copy(world(.53+this.wallInset,EXIT.z));this.exit.rotation.y=Math.PI/2;this.scene.add(this.exit);
+    this.exit=new THREE.Group();
+    // Mount the lobby door on the north wall of (2,25), not in the corridor centre.
+    const exitWallInset=.5-this.wallInset;
+    this.exit.position.copy(world(EXIT.x,EXIT.z-exitWallInset));this.exit.rotation.y=0;this.scene.add(this.exit);
     for(const side of [-.7,.7])this.box(.12,height,.2,this.mat.brass,side,height/2,0,this.exit);this.box(1.52,.12,.2,this.mat.brass,0,height,0,this.exit);
     this.exitMaterial=new THREE.MeshBasicMaterial({color:0x9470c2,transparent:true,opacity:.12,side:THREE.DoubleSide});const field=this.mesh(new THREE.PlaneGeometry(1.25,height-.10),this.exitMaterial,this.exit);field.position.y=height/2;
     this.exitRing=this.mesh(new THREE.TorusGeometry(.48,.025,8,64),new THREE.MeshBasicMaterial({color:0xb18fd3}),this.exit);this.exitRing.position.set(0,1.2,.08);
@@ -163,7 +179,7 @@ export class WorldView {
     if(game.phase==='playing'&&(Math.abs(game.enemy.x-this.warningShadowPose.x)>1e-6||Math.abs(game.enemy.z-this.warningShadowPose.z)>1e-6||Math.abs(this.enemyHeading-this.warningShadowPose.heading)>1e-6)){
       this.warningLight.shadow.needsUpdate=true;Object.assign(this.warningShadowPose,{x:game.enemy.x,z:game.enemy.z,heading:this.enemyHeading});
     }
-    SHARDS.forEach((p,i)=>{if(this.shardFade[i]===0)return;const fade=this.shardFade[i]=Math.max(0,this.shardFade[i]-(game.collected.has(i)?dt*6:0));const dummy=this.dummy;dummy.position.set((p.x-7)*UNIT,.87+Math.sin(time*2+i)*.035+(1-fade)*.2,(p.z-7)*UNIT);dummy.rotation.set(0,time*.9+i*.4,0);dummy.scale.setScalar(fade);dummy.updateMatrix();this.shardMesh.setMatrixAt(i,dummy.matrix);dummy.quaternion.copy(this.camera.quaternion);dummy.updateMatrix();this.shardGlow.setMatrixAt(i,dummy.matrix);});this.shardMesh.instanceMatrix.needsUpdate=true;this.shardGlow.instanceMatrix.needsUpdate=true;
+    SHARDS.forEach((p,i)=>{if(this.shardFade[i]===0)return;const fade=this.shardFade[i]=Math.max(0,this.shardFade[i]-(game.collected.has(i)?dt*6:0));const dummy=this.dummy;dummy.position.copy(world(p.x,p.z,.87+Math.sin(time*2+i)*.035+(1-fade)*.2));dummy.rotation.set(0,time*.9+i*.4,0);dummy.scale.setScalar(fade);dummy.updateMatrix();this.shardMesh.setMatrixAt(i,dummy.matrix);dummy.quaternion.copy(this.camera.quaternion);dummy.updateMatrix();this.shardGlow.setMatrixAt(i,dummy.matrix);});this.shardMesh.instanceMatrix.needsUpdate=true;this.shardGlow.instanceMatrix.needsUpdate=true;
     const unlocked=game.collected.size===SHARDS.length;this.exitMaterial.color.setHex(unlocked?0x74f2b8:0x9470c2);this.exitMaterial.opacity=unlocked?.27+Math.sin(time*3)*.05:.08;this.exitRing.material.color.setHex(unlocked?0x9bffcc:0x5a3d72);this.exitRing.rotation.z=time*(unlocked?.6:.06);
     this.lightClock+=dt;if(this.lightClock>.05){this.lightClock=0;
       // Prelight the view ahead (~half a second of running), not just the closest bulbs.

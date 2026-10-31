@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.js';
-import {MAP,isOpen} from './world.js';
+import {MAP,isOpen,edgeIsOpen} from './world.js';
 import {contactShade} from './hotel-materials.js';
 import {applyHotelAsset} from './hotel-assets.js';
 
@@ -53,7 +53,7 @@ function archGeometry(width,height){
   return new THREE.ExtrudeGeometry(s,{depth:.085,bevelEnabled:false,curveSegments:8});
 }
 
-const cornerAt=(x,z)=>isOpen(x,z)&&(isOpen(x-1,z)||isOpen(x+1,z))&&(isOpen(x,z-1)||isOpen(x,z+1));
+const cornerAt=(x,z)=>isOpen(x,z)&&(edgeIsOpen({x,z},{x:x-1,z})||edgeIsOpen({x,z},{x:x+1,z}))&&(edgeIsOpen({x,z},{x,z:z-1})||edgeIsOpen({x,z},{x,z:z+1}));
 
 // Every ornament sits against a wall or above eye level; the playable maze stays unchanged.
 export function decorateHotel(v,world,unit){
@@ -69,7 +69,7 @@ export function decorateHotel(v,world,unit){
   MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
     if(tile==='#')return;
     const center=world(x,z);
-    const horizontal=isOpen(x-1,z)||isOpen(x+1,z),vertical=isOpen(x,z-1)||isOpen(x,z+1),isCorner=horizontal&&vertical;
+    const horizontal=edgeIsOpen({x,z},{x:x-1,z})||edgeIsOpen({x,z},{x:x+1,z}),vertical=edgeIsOpen({x,z},{x,z:z-1})||edgeIsOpen({x,z},{x,z:z+1}),isCorner=horizontal&&vertical;
     // Follow the corridor with plaster ribs, rather than outlining every tile in gold.
     for(const side of [-1,1]){
       if(horizontal)v.box(unit,.045,.06,ivory,center.x,height-.035,center.z+side*(1.13-v.wallInset*unit));
@@ -88,7 +88,7 @@ export function decorateHotel(v,world,unit){
       const lightPosition=new THREE.Vector3(center.x,height-.21,center.z);lightPosition.isCorner=isCorner;const age=(x*7+z*11)%3;lightPosition.strength=isCorner?[9.6,10.5,10][age]:9.2;lightPosition.reach=5.5;lightPosition.angle=1.12;lightPosition.warmth=age===0?0xf3e8ce:0xffe4b5;v.lampPositions.push(lightPosition);
     }
     for(const d of [{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2},{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0}]){
-      if(isOpen(x+d.x,z+d.z))continue;
+      if(edgeIsOpen({x,z},{x:x+d.x,z:z+d.z}))continue;
       const hash=x*17+z*13+(d.x+1)*3+d.z,g=new THREE.Group();g.position.copy(world(x+d.x*(.482-v.wallInset),z+d.z*(.482-v.wallInset)));g.rotation.y=d.a;v.scene.add(g);
       // Shallow raised joinery stays inside the player's collision clearance.
       for(const sx of [-.72,.72]){

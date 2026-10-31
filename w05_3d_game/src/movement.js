@@ -1,9 +1,9 @@
-import {isOpen,wallInset} from './world.js';
+import {isOpen,wallInset,allTransitionWalls} from './world.js';
 const EPS=1e-9;
 
 // Circle against the faces and rounded corners of a wall. Returns the first inward contact.
-function sweepWall(p,d,x,z,half,radius){
-  const lowX=x-half,highX=x+half,lowZ=z-half,highZ=z+half;
+function sweepWall(p,d,x,z,halfX,halfZ,radius){
+  const lowX=x-halfX,highX=x+halfX,lowZ=z-halfZ,highZ=z+halfZ;
   let hit=null;
   const consider=(time,nx,nz)=>{
     const skinTime=2e-6/Math.max(EPS,Math.hypot(d.x,d.z));
@@ -40,7 +40,13 @@ export function slideMove(start,delta,radius,width){
     const reach=half+radius+skin,lowX=Math.min(p.x,p.x+remaining.x),highX=Math.max(p.x,p.x+remaining.x),lowZ=Math.min(p.z,p.z+remaining.z),highZ=Math.max(p.z,p.z+remaining.z);
     for(let z=minZ;z<=maxZ;z++)for(let x=minX;x<=maxX;x++){
       if(isOpen(x,z)||highX<x-reach||lowX>x+reach||highZ<z-reach||lowZ>z+reach)continue;
-      const hit=sweepWall(p,remaining,x,z,half,radius+skin);
+      const hit=sweepWall(p,remaining,x,z,half,half,radius+skin);
+      if(hit&&(!first||hit.time<first.time))first=hit;
+    }
+    const padding=radius+skin;
+    for(const wall of allTransitionWalls){
+      if(highX<wall.x-wall.halfX-padding||lowX>wall.x+wall.halfX+padding||highZ<wall.z-wall.halfZ-padding||lowZ>wall.z+wall.halfZ+padding)continue;
+      const hit=sweepWall(p,remaining,wall.x,wall.z,wall.halfX,wall.halfZ,padding);
       if(hit&&(!first||hit.time<first.time))first=hit;
     }
     if(!first){p={x:p.x+remaining.x,z:p.z+remaining.z};path.push(p);break;}

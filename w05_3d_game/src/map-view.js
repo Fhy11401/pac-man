@@ -1,9 +1,9 @@
-import {MAP, SHARDS, EXIT, isOpen} from './world.js';
+import {MAP, SHARDS, EXIT, isOpen, edgeIsOpen, BLOCKED_TRANSITIONS} from './world.js';
 import {DEFAULT_TUNING} from './tuning.js';
 
 // Canvas axes are east/down. Rotating by camera yaw makes forward point up.
 export function mapTransform(size, player, yaw, zoom=true,localScale=DEFAULT_TUNING.localMapScale){
-  const unit=(size-24)/MAP.length, scale=zoom?localScale:.8;
+  const unit=(size-24)/Math.max(MAP.length,MAP[0].length), scale=zoom?localScale:.8;
   const anchor=zoom?{x:player.x+.5,z:player.z+.5}:{x:MAP[0].length/2,z:MAP.length/2};
   return {size,unit,scale,yaw,anchor};
 }
@@ -24,11 +24,16 @@ export function drawMap(canvas,game,yaw=-Math.PI/2,zoom=true,localScale=DEFAULT_
       if(tile==='#')return;
       b.fillStyle='#101517';b.fillRect(x*u,z*u,u+.2,u+.2);
       b.strokeStyle='#777c7a';b.lineWidth=1.2;
-      for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])if(!isOpen(x+dx,z+dz)){
+      for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])if(!isOpen(x+dx,z+dz)||!edgeIsOpen({x,z},{x:x+dx,z:z+dz})){
         b.beginPath();if(dx){const xx=(x+(dx>0?1:0))*u;b.moveTo(xx,z*u);b.lineTo(xx,(z+1)*u);}
         else{const zz=(z+(dz>0?1:0))*u;b.moveTo(x*u,zz);b.lineTo((x+1)*u,zz);}b.stroke();
       }
     }));
+    for(const wall of BLOCKED_TRANSITIONS){
+      const vertical=wall.a.x!==wall.b.x, x=vertical?Math.max(wall.a.x,wall.b.x)*u:(wall.a.x+.5)*u, z=vertical?(wall.a.z+.5)*u:Math.max(wall.a.z,wall.b.z)*u;
+      b.strokeStyle='#777c7a';b.lineWidth=1.2;
+      b.beginPath();if(vertical){b.moveTo(x,z-.5*u);b.lineTo(x,z+.5*u);}else{b.moveTo(x-.5*u,z);b.lineTo(x+.5*u,z);}b.stroke();
+    }
     b.shadowColor='#ce75ff';b.shadowBlur=5;b.fillStyle='#c97aee';
     SHARDS.forEach((p,i)=>{if(!game.collected.has(i))b.fillRect((p.x+.36)*u,(p.z+.36)*u,u*.28,u*.28);});
     b.shadowBlur=0;b.strokeStyle=game.collected.size===SHARDS.length?'#92efc7':'#c4b68e';b.lineWidth=2.5;
