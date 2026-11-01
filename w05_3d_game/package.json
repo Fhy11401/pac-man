@@ -1,9 +1,9 @@
 {
   "name": "echo-archive",
-  "version": "2.10.0",
+  "version": "2.13.0",
   "private": true,
   "type": "module",
-  "description": "A local first-person maze collection game with shared human/demo rules",
+  "description": "A local first-person hotel blackout and stealth game",
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs"

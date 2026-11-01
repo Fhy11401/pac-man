@@ -17,8 +17,10 @@ test('painting preserves protected entry, boundary and placed markers',()=>{
  assert.equal(setBarrier(d,d.entryGate.inside,d.entryGate.outside,true).changed,false);
 });
 test('markers move to legal cells and cannot replace another marker or leave the protected room',()=>{
- const d=createDefaultMapDocument();assert.equal(placeMarker(d,{x:15,z:16},'start').changed,true);assert.equal(placeMarker(d,{x:2,z:3},'start').changed,false);
- assert.equal(placeMarker(d,d.start,'enemy').changed,false);assert.equal(placeMarker(d,{x:2,z:3},'enemy').changed,true);assert.equal(validateMapDocument(d).valid,true);
+ const d=createDefaultMapDocument(),outside=d.tiles.flatMap((row,z)=>[...row].flatMap((tile,x)=>tile!=='#'?[{x,z}]:[])).find(p=>!isProtectedCell(d,p)&&![d.start,d.enemy,d.exit].some(marker=>marker.x===p.x&&marker.z===p.z));
+ assert.ok(outside,'marker movement needs a legal public corridor');
+ assert.equal(placeMarker(d,{x:d.safeRoom.minX,z:d.safeRoom.maxZ},'start').changed,true);assert.equal(placeMarker(d,outside,'start').changed,false);
+ assert.equal(placeMarker(d,d.start,'enemy').changed,false);assert.equal(placeMarker(d,outside,'enemy').changed,true);assert.equal(validateMapDocument(d).valid,true);
 });
 test('fast drag fills intermediate cells; straight tool does not introduce a stair-step',()=>{
  assert.deepEqual(strokeCells({x:2,z:3},{x:7,z:5},true),Array.from({length:6},(_,i)=>({x:i+2,z:3})));

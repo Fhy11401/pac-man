@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {MAP,MAP_WIDTH,MAP_HEIGHT,MAP_CENTER,FINE_TOPOLOGY,FINE_STATS,START,START_YAW,ENEMY_START,EXIT,SHARDS,SAFE_ROOM,ENTRY_GATE,isInSafeRoom,gateWall,RULES,CELL_SIZE,BLOCKED_TRANSITIONS,NARROW_WALLS,SOLID_WALLS,NAV_EDGES,isOpen,neighbors,edgeIsOpen,transitionToken,transitionKey,transitionWallRect,transitionWalls,routesFrom,pathTo,routeCacheInfo,coarseStats,key,distance,wallInset} from '../src/world.js';
-import {createDefaultMapDocument} from '../src/map-document.js';
+import {createDefaultHotelDocument} from '../src/hotel-document.js';
 import {slideMove,movementVelocity} from '../src/movement.js';
 import {hasMazeSight,dangerGlowOpacity} from '../src/visibility.js';
 import {DEFAULT_TUNING,MOVEMENT_KEYS} from '../src/tuning.js';
@@ -13,14 +13,14 @@ const startupCache=routeCacheInfo(),widths=[1.3,1.5,1.9,2.4];
 const open=MAP.flatMap((row,z)=>[...row].flatMap((tile,x)=>tile==='#'?[]:[{x,z}]));
 const pairs=open.flatMap(a=>[{x:a.x+1,z:a.z},{x:a.x,z:a.z+1}].filter(b=>isOpen(b.x,b.z)).map(b=>[a,b]));
 const near=(a,b,tolerance=2e-6)=>assert.ok(Math.abs(a-b)<tolerance,`${a} differs from ${b}`);
-const bundled=JSON.parse(readFileSync(new URL('../DEFAULT_MAP.json',import.meta.url),'utf8'));
+const bundled=JSON.parse(readFileSync(new URL('../HOTEL_DEFAULT.json',import.meta.url),'utf8')).map;
 // Runtime markers overlay display tiles; the underlying collectible remains in the document and SHARDS.
 const runtimeTiles=MAP.map((row,z)=>[...row].map((tile,x)=>tile==='S'||tile==='E'?bundled.tiles[z][x]:tile).join(''));
 const definition={tiles:runtimeTiles,start:START,enemy:ENEMY_START,exit:EXIT,barriers:BLOCKED_TRANSITIONS,safeRoom:SAFE_ROOM,entryGate:ENTRY_GATE};
 const bundledAnalysis=analyzeMap(bundled),expectedEdges=bundledAnalysis.stats.cells-bundledAnalysis.stats.components+bundledAnalysis.stats.cycles;
 
 test('runtime topology preserves the complete bundled default document',()=>{
-  assert.deepEqual(createDefaultMapDocument(),bundled);
+  assert.deepEqual(createDefaultHotelDocument().map,bundled);
   assert.deepEqual(BLOCKED_TRANSITIONS,[],'only the dynamic entry boards remain in the default map');
   assert.deepEqual(runtimeTiles,bundled.tiles);
   assert.equal(MAP[START.z][START.x],'S');assert.equal(MAP[ENEMY_START.z][ENEMY_START.x],'E');

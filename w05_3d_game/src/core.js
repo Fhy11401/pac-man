@@ -3,6 +3,9 @@ import {MOVEMENT_KEYS} from './tuning.js';
 import {movementVelocity,slideMove,steerVelocity} from './movement.js';
 import {hasMazeSight} from './visibility.js';
 import {entryCollisionWalls,stepEntry} from './entry-state.js';
+import {BLACKOUT_RULES} from './blackout-layout.js';
+import {createBlackoutState,beginBlackoutStep,finishBlackoutStep,blackoutPlayerWalls,blackoutShouldCatch,blackoutSight,blackoutWon,blackoutCaught,resetBlackoutAfterDeath} from './blackout-state.js';
+export {getBlackoutInteraction,blackoutSight} from './blackout-state.js';
 const mapWidth=MAP[0].length,shardByCell=new Int16Array(mapWidth*MAP.length).fill(-1);
 SHARDS.forEach((p,index)=>shardByCell[p.z*mapWidth+p.x]=index);
 
@@ -19,11 +22,14 @@ function collectAlongTravel(game,travel){
 }
 
 // No demo flag here. Every controller is subject to these exact rules.
-export function createGame(tuning={}) {
-  return { tuning: Object.fromEntries(MOVEMENT_KEYS.map(key=>[key,tuning[key]??RULES[key]])), player: { ...START }, enemy: { ...ENEMY_START }, enemyNext: null,
+export function createGame(tuning={},options={}) {
+  const settings=options.mode==='blackout'?{corridorWidth:BLACKOUT_RULES.corridorWidth,...tuning}:tuning;
+  const game={ tuning: Object.fromEntries(MOVEMENT_KEYS.map(key=>[key,settings[key]??RULES[key]])), player: { ...START }, enemy: { ...ENEMY_START }, enemyNext: null,
     collected: new Set(), lives: RULES.lives, phase: 'playing',
     elapsed: 0, respawn: 0, caught: 0, deaths: 0, events: [], enemyDelay: RULES.enemyDelay,entryOpened:false,entryBreakTime:0,
     moveSpeed: 0, sprinting: false, moveHeading:null, motionVelocity:{x:0,z:0},playerVelocity: { x: 0, z: 0 }, enemyVelocity: { x: 0, z: 0 } };
+  if(options.mode==='blackout')game.blackout=createBlackoutState();
+  return game;
 }
 export function blocked(p, radius = RULES.playerRadius,width=RULES.corridorWidth) {
   const c = cell(p);
@@ -48,7 +54,7 @@ function movePlayer(game, input, dt) {
   game.sprinting = Boolean(input.run && length > .001);
   const velocity=movementVelocity(game.motionVelocity,input,game.tuning,dt);
   const before = { ...game.player };
-  const result=slideMove(before,{x:velocity.x*dt,z:velocity.z*dt},game.tuning.playerRadius,game.tuning.corridorWidth,entryCollisionWalls(game));
+  const result=slideMove(before,{x:velocity.x*dt,z:velocity.z*dt},game.tuning.playerRadius,game.tuning.corridorWidth,game.blackout?blackoutPlayerWalls(game):entryCollisionWalls(game));
   game.player=result.position;
   // Remove only the velocity into contacted walls; don't keep stored pressure against a wall.
   for(const hit of result.contacts){const inward=velocity.x*hit.nx+velocity.z*hit.nz;if(inward<0){velocity.x-=inward*hit.nx;velocity.z-=inward*hit.nz;}}
@@ -103,6 +109,7 @@ function loseLife(game) {
   game.playerVelocity = { x: 0, z: 0 }; game.enemyVelocity = { x: 0, z: 0 };
   // Keep the actual contact position visible until the scare has faded to black.
   game.phase = 'caught'; game.caught = RULES.caughtSeconds;
+  if(game.blackout)blackoutCaught(game);
 }
 function reachedExit(game){
   // A usable arrival area inside the exit cell. Wide-hall wall hugging must not
@@ -117,13 +124,16 @@ export function tick(game, input, dt) {
   // Substeps keep collisions stable across refresh rates and long frames.
   let remaining = Math.min(dt, .1);
   let movedX=0,movedZ=0,movedTime=0;
+  let firstStep=true;
   while (remaining > .000001) {
     const step = Math.min(1 / 120, remaining); remaining -= step;
+    const controls=firstStep?input:{...input,action:undefined};firstStep=false;
     if (game.phase === 'caught') {
       game.caught -= step;
       if(game.caught<=0){
         if(game.lives===0){game.phase='lost';game.events.push('lost');break;}
         game.player={...START};game.enemy={...ENEMY_START};game.enemyNext=null;game.enemyDelay=1.2;
+        if(game.blackout)resetBlackoutAfterDeath(game);
         game.phase='respawn';game.respawn=RULES.respawnSeconds;game.events.push('relocate');
       }
       continue;
@@ -133,9 +143,16 @@ export function tick(game, input, dt) {
       if (game.respawn <= 0) { game.phase = 'playing'; game.events.push('respawn'); }
       continue;
     }
-    stepEntry(game,input,step);
-    const travel=movePlayer(game, input, step);
+    const movementInput=game.blackout?beginBlackoutStep(game,controls,step):controls;
+    if(!game.blackout)stepEntry(game,controls,step);
+    const travel=movePlayer(game,movementInput,step);
     movedX+=travel.at(-1).x-travel[0].x;movedZ+=travel.at(-1).z-travel[0].z;movedTime+=step;
+    if(game.blackout){
+      game.elapsed+=step;finishBlackoutStep(game,step);
+      if(blackoutShouldCatch(game)){loseLife(game);break;}
+      if(blackoutWon(game)){game.phase='won';game.events.push('won');break;}
+      continue;
+    }
     if(!game.entryOpened)continue;
     game.elapsed += step;
     collectAlongTravel(game,travel);

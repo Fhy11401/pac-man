@@ -1,10 +1,34 @@
-import {ENTRY_GATE,RULES,distance,gateWall,isInSafeRoom} from './world.js';
+import {ENTRY_GATE,RULES,CELL_SIZE,distance,gateWall,isInSafeRoom,isOpen,wallInset} from './world.js';
+import {BLACKOUT_LAYOUT} from './blackout-layout.js';
+import {roomCollisionWalls} from './security-room-layout.js';
+import {hallFurnitureWalls} from './hall-layout.js';
 import {hasMazeSight} from './visibility.js';
 
 export const ENTRY_BREAK_SECONDS=.8;
 const emptyWalls=Object.freeze([]),wallsByWidth=new Map();
+const blackoutWalls=new Map(),furnitureByWidth=new Map();
+export function roomFurnitureWalls(width){
+  if(!furnitureByWidth.has(width)){
+    if(furnitureByWidth.size>=16)furnitureByWidth.delete(furnitureByWidth.keys().next().value);
+    furnitureByWidth.set(width,Object.freeze([...roomCollisionWalls(width),...hallFurnitureWalls(BLACKOUT_LAYOUT.halls??[],width,CELL_SIZE,isOpen)].map(Object.freeze)));
+  }
+  return furnitureByWidth.get(width);
+}
+export function roomDoorWall(room,width){
+  const door=room.door,half=.5+wallInset(width);
+  return Object.freeze({id:room.id,type:'room-door',x:door.x,z:door.z,halfX:door.axis==='x'?.03:half,halfZ:door.axis==='x'?half:.03});
+}
 const outward={x:ENTRY_GATE.outside.x-ENTRY_GATE.inside.x,z:ENTRY_GATE.outside.z-ENTRY_GATE.inside.z};
 export function entryCollisionWalls(game){
+  if(game.blackout){
+    const rooms=(BLACKOUT_LAYOUT.rooms??[]).filter(room=>(game.blackout.roomDoors?.[room.id]?.progress??1)>1e-6),closed=game.blackout.doorProgress>1e-6;
+    const width=game.tuning.corridorWidth,key=`${width}/${Number(closed)}/${rooms.map(room=>room.id).join(',')}`;
+    if(!blackoutWalls.has(key)){
+      if(blackoutWalls.size>=64)blackoutWalls.delete(blackoutWalls.keys().next().value);
+      blackoutWalls.set(key,Object.freeze([...(closed?[gateWall(width)]:[]),...rooms.map(room=>roomDoorWall(room,width)),...roomFurnitureWalls(width)]));
+    }
+    return blackoutWalls.get(key);
+  }
   if(game.entryOpened)return emptyWalls;
   const width=game.tuning.corridorWidth;
   if(!wallsByWidth.has(width)){

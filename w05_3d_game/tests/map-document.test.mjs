@@ -76,9 +76,9 @@ test('draft saving keeps incomplete geometry, reports storage errors, and never 
 });
 
 test('preview snapshots are immutable and retain only the latest five independently of the draft',()=>{
-  const storage=memoryStorage(),doc=createDefaultMapDocument(),now=10000000;saveDraft(doc,{storage});
+  const storage=memoryStorage(),doc=createDefaultMapDocument(),initialName=doc.name,now=10000000;saveDraft(doc,{storage});
   const previews=[];for(let i=0;i<6;i++){doc.name=`地图 ${i}`;previews.push(createPreview(doc,{storage,now:now+i,baseURL:'http://localhost:5185/editor.html'}));}
-  assert.equal(JSON.parse(storage.getItem(PREVIEW_STORAGE_KEY)).length,5);assert.equal(loadDraft({storage}).document.name,'我的地图');
+  assert.equal(JSON.parse(storage.getItem(PREVIEW_STORAGE_KEY)).length,5);assert.equal(loadDraft({storage}).document.name,initialName);
   assert.match(previews.at(-1).url,/index\.html\?mapDraft=/);doc.name='继续编辑';
   const selected=loadRuntimeMapDefinition({storage,search:`?mapDraft=${previews.at(-1).id}`,now:now+7});assert.equal(selected.isDraft,true);assert.equal(selected.definition.name,'地图 5');assert.equal(selected.error,null);
   const evicted=loadRuntimeMapDefinition({storage,search:`?mapDraft=${previews[0].id}`,now:now+7});assert.equal(evicted.definition,null);assert.match(evicted.error,/移除/);

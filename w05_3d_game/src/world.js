@@ -1,12 +1,15 @@
 import {DEFAULT_TUNING,MOVEMENT_KEYS} from './tuning.js';
 import {createDefaultMapDocument,validateMapDocument} from './map-document.js';
 import {loadRuntimeMapDefinition} from './map-draft.js';
+import {RUNTIME_HOTEL} from './hotel-draft.js';
+import {createDefaultHotelDocument,validateHotelDocument} from './hotel-document.js';
 
 const selected=loadRuntimeMapDefinition();
-export const IS_MAP_DRAFT=selected.isDraft,MAP_DRAFT_ERROR=selected.error;
+export const IS_MAP_DRAFT=selected.isDraft,IS_HOTEL_DRAFT=RUNTIME_HOTEL.isDraft,MAP_DRAFT_ERROR=RUNTIME_HOTEL.error??selected.error;
+export const HOTEL_DOCUMENT=RUNTIME_HOTEL.definition??createDefaultHotelDocument();
 // A rejected preview keeps imports usable only to display its error. main.js
 // refuses to construct a renderer or start play whenever MAP_DRAFT_ERROR is set.
-export const MAP_DOCUMENT=Object.freeze(selected.definition??createDefaultMapDocument());
+export const MAP_DOCUMENT=Object.freeze(IS_MAP_DRAFT?(selected.definition??createDefaultMapDocument()):HOTEL_DOCUMENT.map);
 const runtimeMap=MAP_DOCUMENT.tiles.map(row=>[...row]);
 runtimeMap[MAP_DOCUMENT.start.z][MAP_DOCUMENT.start.x]='S';runtimeMap[MAP_DOCUMENT.enemy.z][MAP_DOCUMENT.enemy.x]='E';
 const pairToken=(a,b)=>[`${a.x},${a.z}`,`${b.x},${b.z}`].sort().join('|');
@@ -19,7 +22,7 @@ function buildFineMap(map,barriers){
   return fine.map(row=>row.join(''));
 }
 
-// Smooth map experiment. Simulation coordinates remain coarse cells.
+// Terrain and facilities share the same selected hotel snapshot.
 export const MAP=Object.freeze(runtimeMap.map(row=>row.join(''))),FINE_TOPOLOGY=Object.freeze(buildFineMap(MAP,MAP_DOCUMENT.barriers));
 export const MAP_WIDTH=MAP[0].length,MAP_HEIGHT=MAP.length;
 export const MAP_CENTER=Object.freeze({x:(MAP_WIDTH-1)/2,z:(MAP_HEIGHT-1)/2});
@@ -150,9 +153,9 @@ const fineOpen=(x,z)=>{const token=FINE_TOPOLOGY[z]?.[x];return token!==undefine
 export const FINE_WALKABLE_VERTICES=Object.freeze(FINE_TOPOLOGY.flatMap((row,z)=>[...row].flatMap((_,x)=>fineOpen(x,z)?[Object.freeze({x,z})]:[])));
 export const FINE_TOPOLOGY_EDGES=FINE_WALKABLE_VERTICES.reduce((sum,p)=>sum+Number(fineOpen(p.x+1,p.z))+Number(fineOpen(p.x,p.z+1)),0);
 export const FINE_STATS=Object.freeze({vertices:FINE_WALKABLE_VERTICES.length,edges:FINE_TOPOLOGY_EDGES,cycleRank:FINE_TOPOLOGY_EDGES-FINE_WALKABLE_VERTICES.length+1});
-export const TOPOLOGY_VERSION=IS_MAP_DRAFT?'Night Hotel local map preview':'Night Hotel map experiment';
+export const TOPOLOGY_VERSION=IS_MAP_DRAFT?'Night Hotel legacy map preview':IS_HOTEL_DRAFT?'Night Hotel layout preview':'Night Hotel halls and circulation';
 export function assertWorld(){
-  const validation=validateMapDocument(MAP_DOCUMENT);
+  const validation=IS_MAP_DRAFT?validateMapDocument(MAP_DOCUMENT):validateHotelDocument(HOTEL_DOCUMENT);
   if(!validation.valid)throw new Error(validation.errors.map(error=>error.message).join(' '));
   if(!MAP_WIDTH||!MAP_HEIGHT||MAP.some(row=>row.length!==MAP_WIDTH))throw new Error('Map dimensions are inconsistent');
   if(MAP[START.z][START.x]!=='S'||MAP[ENEMY_START.z][ENEMY_START.x]!=='E')throw new Error('Map markers do not match team topology');

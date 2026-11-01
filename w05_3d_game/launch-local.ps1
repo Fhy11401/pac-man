@@ -70,15 +70,35 @@ import hashlib
 import http.server
 import json
 import os
+import re
+import stat
 import sys
 from urllib.parse import unquote, urlsplit
 
 root = os.path.abspath(sys.argv[1])
+real_root = os.path.realpath(root)
 port = int(sys.argv[2])
 normalized = root.replace("\\", "/").rstrip("/").lower()
 identity = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 health = json.dumps({"app": "night-hotel-local", "protocol": 1,
                     "projectId": identity, "runtime": "python", "pid": os.getpid()}).encode("utf-8")
+
+def byte_range(value, size):
+    if not value or size == 0:
+        return None
+    match = re.fullmatch(r"bytes\s*=\s*([0-9]*)-([0-9]*)\s*", value.strip(), re.I)
+    if not match or not any(match.groups()):
+        return None
+    # Bound huge decimal numerals before conversion, including Python's digit limit.
+    def number(text):
+        text = text.lstrip("0") or "0"
+        return size + 1 if len(text) > 32 else int(text)
+    first, last = match.groups()
+    if not first:
+        suffix = number(last)
+        return False if suffix == 0 else (max(0, size - suffix), size - 1)
+    start, end = number(first), number(last) if last else size - 1
+    return False if start >= size or end < start else (start, min(end, size - 1))
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
@@ -86,7 +106,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                       ".css": "text/css; charset=utf-8",
                       ".html": "text/html; charset=utf-8",
                       ".json": "application/json; charset=utf-8",
-                      ".svg": "image/svg+xml"}
+                      ".svg": "image/svg+xml", ".mp3": "audio/mpeg",
+                      ".ogg": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4"}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=root, **kwargs)
@@ -98,17 +119,73 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.respond(True)
 
     def respond(self, head):
-        if unquote(urlsplit(self.path).path) == "/__night_hotel_health":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(health)))
-            self.end_headers()
-            if not head:
-                self.wfile.write(health)
-        elif head:
-            super().do_HEAD()
-        else:
-            super().do_GET()
+        sent = False
+        try:
+            pathname = unquote(urlsplit(self.path).path, errors="strict")
+            if pathname == "/__night_hotel_health":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(health)))
+                self.end_headers()
+                sent = True
+                if not head:
+                    self.wfile.write(health)
+                return
+            file = os.path.realpath(os.path.join(root, pathname.lstrip("/")))
+            if os.path.normcase(os.path.commonpath([real_root, file])) != os.path.normcase(real_root):
+                self.send_error(403, "Forbidden")
+                return
+            if os.path.isdir(file):
+                file = os.path.realpath(os.path.join(file, "index.html"))
+                if os.path.normcase(os.path.commonpath([real_root, file])) != os.path.normcase(real_root):
+                    self.send_error(403, "Forbidden")
+                    return
+            with open(file, "rb") as source:
+                info = os.fstat(source.fileno())
+                if not stat.S_ISREG(info.st_mode):
+                    self.send_error(404, "Not found")
+                    return
+                size = info.st_size
+                selected = byte_range(self.headers.get("Range"), size) if not head and not self.headers.get("If-Range") else None
+                if selected is False:
+                    self.send_response(416)
+                    self.send_header("Content-Range", "bytes */%d" % size)
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                self.send_response(206 if selected else 200)
+                self.send_header("Content-Type", self.guess_type(file))
+                self.send_header("Accept-Ranges", "bytes")
+                length = selected[1] - selected[0] + 1 if selected else size
+                self.send_header("Content-Length", str(length))
+                if selected:
+                    self.send_header("Content-Range", "bytes %d-%d/%d" % (*selected, size))
+                self.end_headers()
+                sent = True
+                if not head:
+                    source.seek(selected[0] if selected else 0)
+                    while length:
+                        chunk = source.read(min(length, 64 * 1024))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        length -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except (OSError, ValueError):
+            if not sent:
+                self.send_error(404, "Not found")
+            else:
+                self.close_connection = True
+
+    def unsupported(self):
+        self.send_response(405)
+        self.send_header("Allow", "GET, HEAD")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = unsupported
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -122,7 +199,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+print("The Night Hotel ready: http://127.0.0.1:%d/" % server.server_port, flush=True)
+server.serve_forever()
 '@
     $helperDirectory = Join-Path ([IO.Path]::GetTempPath()) 'night-hotel-local'
     [IO.Directory]::CreateDirectory($helperDirectory) | Out-Null
@@ -163,7 +242,7 @@ function Start-LocalServer([int]$PortNumber, $Candidate) {
 }
 
 try {
-    $pageFile = if ($Page -eq 'editor') { 'editor.html' } else { 'index.html' }
+    $pageFile = if ($Page -eq 'editor') { 'hotel-editor.html' } else { 'index.html' }
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot $pageFile) -PathType Leaf)) { throw 'The requested page is missing. Extract the complete game folder first.' }
     $mutex = [Threading.Mutex]::new($false, "Local\NightHotelLaunch-$projectId")
     try { $ownsMutex = $mutex.WaitOne(15000) }
@@ -192,7 +271,7 @@ try {
         }
         if ($null -eq $selectedPort) { throw 'The local server could not start. Check that Node.js or Python 3 runs correctly and that a local port is available.' }
     }
-    $suffix = if ($Page -eq 'editor') { '/editor.html' } else { '/' }
+    $suffix = if ($Page -eq 'editor') { '/hotel-editor.html' } else { '/' }
     $address = "http://127.0.0.1:$selectedPort$suffix"
     Write-Host "The Night Hotel is ready: $address"
     if (-not $NoBrowser) { Start-Process -FilePath $address }

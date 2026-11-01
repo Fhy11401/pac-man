@@ -1,5 +1,12 @@
 import {MusicDirector,prepareScore} from './music.js';
+import {BLACKOUT_LAYOUT} from './blackout-layout.js';
+import {ROOM_DOOR_TIMING} from './blackout-state.js';
 const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+export function phoneRingGain(distance,occluded=false){
+  // A hotel-wide bell retains a quiet reflected tail behind walls.
+  const d=Number.isFinite(distance)?Math.max(0,distance):Infinity;
+  return .025+.195/(1+(d/9)**1.6)*(occluded?.62:1);
+}
 export function proximityMix(distance,occluded=false){
   const near=clamp(1-distance/7.5),presence=clamp(1-distance/10);
   return {heartGain:.38*near*near,heartInterval:60/(62+94*near),footGain:.66*presence**1.35*(occluded?.62:1),voiceGain:.29*near*(occluded?.72:1)};
@@ -20,10 +27,10 @@ export class Sound {
     for(const f of [42,63.18]){const osc=this.ctx.createOscillator();osc.type='sine';osc.frequency.value=f;osc.connect(this.ambient);osc.start();}
   }this.ctx.resume().catch(()=>{});}catch{}}
   setPlaying(value){if(value===this.playing)return;this.playing=value;this.music?.setActive(value&&!this.muted);if(this.ctx)this.threat.gain.setTargetAtTime(value?1:0,this.ctx.currentTime,.035);if(!value){this.heartClock=0;this.voiceClock=1.5;}}
-  setPaused(value){if(this.ctx)this.effects.gain.setTargetAtTime(value?0:1,this.ctx.currentTime,.015);}
+  setPaused(value){this.paused=Boolean(value);if(this.ctx)this.effects.gain.setTargetAtTime(value?0:1,this.ctx.currentTime,.015);}
   toggle(){this.muted=!this.muted;if(this.ctx)this.master.gain.setTargetAtTime(this.muted?0:.8,this.ctx.currentTime,.025);this.music?.setActive(this.playing&&!this.muted);return this.muted;}
   setMusicVolume(value){this.musicVolume=clamp(value);this.music?.setVolume(this.musicVolume);}
-  ready(){return this.ctx&&this.ctx.state==='running'&&!this.muted;}
+  ready(){return this.ctx&&this.ctx.state==='running'&&!this.muted&&!this.paused;}
   track(source,nodes,end){this.voices.add(source);source.onended=()=>{this.voices.delete(source);for(const n of [source,...nodes])n.disconnect();};source.stop(end);}
   tone(freq,duration=.18,type='sine',volume=.16,delay=0,pan=0,bus=this.effects,endFrequency=freq){
     if(!this.ready())return;const now=this.ctx.currentTime+delay,osc=this.ctx.createOscillator(),gain=this.ctx.createGain(),stereo=this.ctx.createStereoPanner();
@@ -59,6 +66,13 @@ export class Sound {
       this.tone(scare?390:147,.25,'triangle',level*.18,delay,pan,bus,scare?120:83);
     }
   }
+  doorImpact(volume,pan,breaking=false){
+    this.tone(105,breaking?.42:.31,'sine',volume*.8,0,pan,this.effects,35);
+    this.tone(205,.18,'triangle',volume*.22,.012,pan,this.effects,68);
+    this.noiseBurst(volume*.75,pan,breaking?.43:.24,breaking?1800:680,this.effects,0,breaking?320:180);
+    this.noiseBurst(volume*.28,pan,.18,1150,this.effects,.06,280);
+    if(breaking)this.noiseBurst(volume*.36,-pan*.6,.31,2300,this.effects,.12,420);
+  }
   event(name,count=0){
     if(name==='start'||name==='respawn')this.music?.reset();
     if(name==='collect'){const f=[660,740,830,988,1108,1244,1320,1480][count%8];this.tone(f,.12,'triangle',.085);this.tone(f*1.5,.09,'sine',.02,.025);}
@@ -66,12 +80,67 @@ export class Sound {
     if(name==='won')[330,440,554,660].forEach((f,i)=>this.tone(f,.6,'sine',.12,i*.16));
     if(name==='hit'){this.growl(.62,0,true);this.tone(120,.45,'triangle',.35,0,0,this.effects,33);}
     if(name==='tablet')this.noiseBurst(.1,0,.18,900,this.effects,0,350);
+    if(name==='door'){
+      this.noiseBurst(.12,0,.65,350,this.effects,0,90);
+      this.tone(92,.58,'triangle',.055,0,0,this.effects,54);
+      this.noiseBurst(.16,0,.08,750,this.effects,.57,180);
+    }
+    if(name==='door-blocked')this.tone(180,.16,'triangle',.055);
+    if(name==='room-door-blocked')this.tone(180,.12,'triangle',.035);
+    if(name==='room-door'){
+      this.noiseBurst(.13,0,.11,1200,this.effects,0,230);
+      this.tone(135,.25,'triangle',.045,.035,0,this.effects,72);
+      this.noiseBurst(.10,0,.08,550,this.effects,.18,110);
+    }
+    if(name==='call-ring')for(const delay of [0,.2,.45]){this.tone(880,.14,'sine',.08,delay);this.tone(1320,.14,'sine',.035,delay);}
+    if(name==='mains-fail'){this.tone(110,.65,'sawtooth',.07,0,0,this.effects,24);this.noiseBurst(.14,0,.12,650,this.effects,0,100);}
+    if(name==='backup-start'){this.tone(42,.65,'triangle',.065,0,0,this.effects,110);this.noiseBurst(.08,0,.18,480,this.effects,.15,80);this.tone(660,.15,'sine',.035,.5);}
+    if(name==='phone-a'||name==='phone-b'){this.tone(697,.09,'sine',.035);this.tone(1209,.09,'sine',.025);}
+    if(name==='power-on'){
+      this.noiseBurst(.23,0,.15,600,this.effects,0,120);
+      this.tone(55,.8,'triangle',.065,.12,0,this.effects,110);
+      [330,440,554].forEach((f,i)=>this.tone(f,.35,'sine',.065,.3+i*.15));
+    }
+    if(name==='hide'||name==='unhide')this.noiseBurst(.14,0,.3,430,this.effects,0,180);
+    if(name==='flashlight'||name==='nightvision'||name==='monitor')this.noiseBurst(.055,0,.055,1600,this.effects,0,500);
+    if(name==='battery')this.tone(660,.19,'sine',.07,0,0,this.effects,880);
+    if(name==='battery-empty'){this.tone(220,.2,'triangle',.05);this.tone(165,.25,'triangle',.05,.23);}
     if(name==='boards-break'){
       this.music?.reset();this.tone(170,.22,'triangle',.22,0,0,this.effects,55);
       for(const [delay,pan,volume] of [[0,-.2,.42],[.07,.3,.3],[.18,-.1,.18]])this.noiseBurst(volume,pan,.16,2100,this.effects,delay,700);
       this.tone(76,.3,'sine',.13,.06,0,this.effects,34);
     }
     if(name==='start'||name==='respawn'){this.stride=0;this.enemyStride=0;this.heartClock=0;this.voiceClock=1.4;this.tone(220,.25,'sine',.07);}
+  }
+  updateBlackout(dt,game,yaw,sight){
+    const state=game.blackout;if(!state)return;
+    if(this.blackoutGame!==game){this.blackoutGame=game;this.phoneClocks=[0,0];this.repairStep=0;this.bashSounds=new Map();}
+    if(!this.ready())return;
+    state.phones.forEach((phone,i)=>{
+      if(phone.remaining<=0){this.phoneClocks[i]=0;return;}
+      this.phoneClocks[i]-=dt;if(this.phoneClocks[i]>0)return;this.phoneClocks[i]=1.15;
+      const source=BLACKOUT_LAYOUT.phones[i],dx=source.x-game.player.x,dz=source.z-game.player.z,d=Math.hypot(dx,dz);
+      const gain=phoneRingGain(d,!sight(game,game.player,source)),pan=clamp((Math.cos(yaw)*dx-Math.sin(yaw)*dz)/Math.max(.1,d),-1,1);
+      for(const delay of [0,.17]){this.tone(1550,.12,'sine',gain,delay,pan);this.tone(2070,.13,'sine',gain*.42,delay,pan);this.noiseBurst(gain*.35,pan,.09,2800,this.effects,delay,1200);}
+      this.tone(980,.24,'sine',gain*.22,.08,-pan*.45);
+    });
+    for(const room of BLACKOUT_LAYOUT.rooms??[]){
+      const door=state.roomDoors?.[room.id],last=this.bashSounds.get(room.id);
+      const dx=room.door.x-game.player.x,dz=room.door.z-game.player.z,d=Math.hypot(dx,dz);
+      const gain=.44/(1+(d/4.5)**1.6),pan=clamp((Math.cos(yaw)*dx-Math.sin(yaw)*dz)/Math.max(.1,d),-1,1);
+      if(door?.bashing){
+        const time=Math.max(0,Number(door.bashTime)||0),beat=Math.floor(time/(ROOM_DOOR_TIMING.bashInterval??.5));
+        // Game time stops when paused. Repeated render updates cannot replay a hit.
+        if(!last||time<last.time||beat!==last.beat)this.doorImpact(gain,pan);
+        this.bashSounds.set(room.id,{beat,time});
+      }else if(last){
+        if(!door?.closed&&last.time>=4.5)this.doorImpact(gain,pan,true);
+        this.bashSounds.delete(room.id);
+      }
+    }
+    const repairStep=Math.floor(state.repairProgress*16);
+    if(repairStep>this.repairStep&&repairStep<16){this.noiseBurst(.055,0,.1,1100,this.effects,0,400);this.tone(85,.09,'triangle',.025);}
+    this.repairStep=repairStep;
   }
   update(dt,speed,d,pan,occluded,escape,enemySpeed=0,playerSteps=0){
     // Camera foot plants and audible footfalls share a single distance clock.

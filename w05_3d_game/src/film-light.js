@@ -1,5 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import {ContactAO} from './contact-ao.js';
+import {mosaicGrid,MosaicFallback} from './friendly-render.js';
 
 const vertex=`varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`;
 const material=(fragment,uniforms)=>new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:fragment,uniforms,depthTest:false,depthWrite:false,blending:THREE.NoBlending,toneMapped:false});
@@ -10,7 +11,7 @@ const material=(fragment,uniforms)=>new THREE.ShaderMaterial({vertexShader:verte
 export class FilmLight {
   constructor(renderer){
     this.renderer=renderer;this.enabled=renderer.extensions.has('EXT_color_buffer_float');
-    if(!this.enabled)return;
+    if(!this.enabled){this.mosaicFallback=new MosaicFallback(renderer);return;}
     const gl=renderer.getContext();
     this.color=new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType,samples:Math.min(4,gl.getParameter(gl.MAX_SAMPLES)),depthBuffer:true,stencilBuffer:false});
     this.color.depthTexture=new THREE.DepthTexture(1,1,THREE.UnsignedIntType);
@@ -26,22 +27,23 @@ export class FilmLight {
     this.blur=material(`varying vec2 vUv;uniform sampler2D source;uniform vec2 direction;
       void main(){vec3 c=texture2D(source,vUv).rgb*.227027;c+=(texture2D(source,vUv+direction*1.384615).rgb+texture2D(source,vUv-direction*1.384615).rgb)*.316216;c+=(texture2D(source,vUv+direction*3.230769).rgb+texture2D(source,vUv-direction*3.230769).rgb)*.070270;gl_FragColor=vec4(c,1.);}`,
       {source:{value:this.a.texture},direction:{value:new THREE.Vector2()}});
-    this.finish=material(`varying vec2 vUv;uniform sampler2D source;uniform sampler2D bloom;uniform float strength;
+    this.finish=material(`varying vec2 vUv;uniform sampler2D source;uniform sampler2D bloom;uniform float strength;uniform float securityInfrared;uniform vec2 mosaicCells;
       uniform sampler2D contactMap;uniform sampler2D depthMap;uniform mat4 inverseProjection;uniform vec2 contactTexel;uniform float contactStrength;
-      float contactVisibility(){
-        float d=texture2D(depthMap,vUv).x;vec4 p=inverseProjection*vec4(vUv*2.-1.,d*2.-1.,1.);float z=-p.z/p.w;
+      float contactVisibility(vec2 uv){
+        float d=texture2D(depthMap,uv).x;vec4 p=inverseProjection*vec4(uv*2.-1.,d*2.-1.,1.);float z=-p.z/p.w;
         float total=0.,weight=0.;
         for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){
-          vec2 s=texture2D(contactMap,vUv+vec2(float(x),float(y))*contactTexel).rg;
+          vec2 s=texture2D(contactMap,uv+vec2(float(x),float(y))*contactTexel).rg;
           float w=exp(-abs(s.y-z)*45.)/(1.+float(x*x+y*y));total+=s.x*w;weight+=w;
         }
         return weight>.001?total/weight:1.;
       }
-      void main(){vec3 base=texture2D(source,vUv).rgb;
-        float ao=1.;if(contactStrength>0.)ao=mix(1.,contactVisibility(),contactStrength);vec3 c=base*ao+texture2D(bloom,vUv).rgb*strength;gl_FragColor=vec4(c,1.);
+      void main(){vec2 uv=vUv;if(mosaicCells.x>0.)uv=(floor(vUv*mosaicCells)+.5)/mosaicCells;vec3 base=texture2D(source,uv).rgb;
+        float ao=1.;if(contactStrength>0.)ao=mix(1.,contactVisibility(uv),contactStrength);vec3 c=base*ao+texture2D(bloom,uv).rgb*strength;
+        float sensorLuma=dot(c,vec3(.2126,.7152,.0722));c=mix(c,sensorLuma*vec3(.74,1.,.82),securityInfrared);gl_FragColor=vec4(c,1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
-      }`,{source:{value:this.color.texture},bloom:{value:this.a.texture},strength:{value:.12},contactMap:{value:this.contact.target.texture},depthMap:{value:this.color.depthTexture},inverseProjection:{value:new THREE.Matrix4()},contactTexel:{value:new THREE.Vector2()},contactStrength:{value:.85}});
+      }`,{source:{value:this.color.texture},bloom:{value:this.a.texture},strength:{value:.12},securityInfrared:{value:0},mosaicCells:{value:new THREE.Vector2()},contactMap:{value:this.contact.target.texture},depthMap:{value:this.color.depthTexture},inverseProjection:{value:new THREE.Matrix4()},contactTexel:{value:new THREE.Vector2()},contactStrength:{value:.85}});
     this.finish.toneMapped=true;
     this.size=new THREE.Vector2();this.resize();
   }
@@ -53,7 +55,7 @@ export class FilmLight {
   }
   warmup(scene,camera,scareScene,scareCamera){
     const r=this.renderer,previous=r.getRenderTarget();
-    if(!this.enabled){r.compile(scene,camera);r.compile(scareScene,scareCamera);return;}
+    if(!this.enabled){r.compile(scene,camera);r.compile(scareScene,scareCamera);this.mosaicFallback.warmup(scene,camera,scareScene,scareCamera);return;}
     // Shader variants depend on render target (HDR has no in-material tone map).
     // Compile the actual gameplay variants before input, not their screen variants.
     try{
@@ -62,10 +64,11 @@ export class FilmLight {
       this.quad.material=this.finish;r.setRenderTarget(null);r.compile(this.scene,this.camera);
     }finally{r.setRenderTarget(previous);}
   }
-  render(scene,camera,overlay,contactStrength=.85){
+  render(scene,camera,overlay,contactStrength=.85,{mosaic=false}={}){
     const r=this.renderer;
     // Respect caller-owned targets used by diagnostics or future reflection captures.
-    if(!this.enabled||r.getRenderTarget()){r.render(scene,camera);overlay?.();return;}
+    if(!this.enabled||r.getRenderTarget()){if(!this.enabled&&mosaic&&!r.getRenderTarget())this.mosaicFallback.render(scene,camera,overlay);else{r.render(scene,camera);overlay?.();}return;}
+    const grid=mosaic?mosaicGrid(this.color.width,this.color.height):{x:0,y:0};this.finish.uniforms.mosaicCells.value.set(grid.x,grid.y);
     const autoReset=r.info.autoReset;r.info.autoReset=true;
     r.setRenderTarget(this.color);r.render(scene,camera);r.info.autoReset=false;
     this.contact.update(camera);this.finish.uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);this.finish.uniforms.contactStrength.value=contactStrength;
@@ -77,5 +80,5 @@ export class FilmLight {
     this.blur.uniforms.source.value=this.b.texture;this.blur.uniforms.direction.value.set(0,1.6/this.blurHeight);r.setRenderTarget(this.a);r.render(this.scene,this.camera);
     this.quad.material=this.finish;r.setRenderTarget(null);r.render(this.scene,this.camera);r.info.autoReset=autoReset;
   }
-  dispose(){if(!this.enabled)return;this.contact.dispose();for(const target of [this.color,this.a,this.b])target.dispose();for(const m of [this.bright,this.blur,this.finish])m.dispose();this.geometry.dispose();}
+  dispose(){if(!this.enabled){this.mosaicFallback?.dispose();return;}this.contact.dispose();for(const target of [this.color,this.a,this.b])target.dispose();for(const m of [this.bright,this.blur,this.finish])m.dispose();this.geometry.dispose();}
 }

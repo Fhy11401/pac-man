@@ -70,7 +70,7 @@ export function decorateHotel(v,world,unit){
   const mouldingGeometry=new THREE.CylinderGeometry(.007,.007,unit,6,1),pictureBead=new THREE.CylinderGeometry(.005,.005,1,6,1),frameStud=new THREE.SphereGeometry(.0075,8,4);
   const signSites=buildLandmarkPlan(),signCounts=[0,0,0],archRegions=new Set();let roomLampPlaced=false;
   MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
-    if(tile==='#')return;
+    if(tile==='#'||v.hallAt?.(x,z))return;
     const center=world(x,z),region=regionFor(x),roomCell=x>=SAFE_ROOM.minX&&x<=SAFE_ROOM.maxX&&z>=SAFE_ROOM.minZ&&z<=SAFE_ROOM.maxZ;
     const horizontal=linked(x,z,-1,0)||linked(x,z,1,0),vertical=linked(x,z,0,-1)||linked(x,z,0,1),isCorner=horizontal&&vertical;
     // Cornices belong to the walls. Crossbars at every floor cell exposed the

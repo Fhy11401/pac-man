@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWallShell} from '../src/wall-shell.js';
 import {MAP,isOpen,CELL_SIZE,wallInset} from '../src/world.js';
+import {BLACKOUT_RULES} from '../src/blackout-layout.js';
 
 const close=(a,b,eps=2e-5)=>assert.ok(Math.abs(a-b)<eps,`${a} != ${b}`);
 const triangleData=g=>{const p=g.attributes.position,n=g.attributes.normal,result=[];for(let i=0;i<g.index.count;i+=3){const ids=[g.index.getX(i),g.index.getX(i+1),g.index.getX(i+2)],points=ids.map(j=>[p.getX(j),p.getY(j),p.getZ(j)]),normal=[n.getX(ids[0]),n.getY(ids[0]),n.getZ(ids[0])];result.push({points,normal});}return result;};
@@ -60,11 +61,13 @@ test('side UVs are continuous in world metres instead of restarting on every cub
 });
 
 test('full-maze caps match the former AABB union and keep every walkable tile centre clear',()=>{
-  const walls=MAP.flatMap((row,z)=>[...row].flatMap((tile,x)=>tile==='#'?[{x,z}]:[])),unit=CELL_SIZE,inset=wallInset(1.5),pad=.018;
-  const g=createWallShell(walls,unit,inset,.94,.47,pad),triangles=verifyExterior(g,walls,unit,inset,.94,.47,pad);
-  for(let z=0;z<MAP.length;z++)for(let x=0;x<MAP[z].length;x++)if(isOpen(x,z))assert.equal(topCovers(triangles,(x-7)*unit,(z-7)*unit),false);
-  for(let x=-18.19;x<18;x+=.83)for(let z=-18.17;z<18;z+=.79)assert.equal(topCovers(triangles,x,z),occupied(walls,unit,inset,pad,x,z));
-  assert.ok(Number.isFinite(g.boundingSphere.radius));g.dispose();
+  const walls=MAP.flatMap((row,z)=>[...row].flatMap((tile,x)=>tile==='#'?[{x,z}]:[])),unit=CELL_SIZE,pad=.018;
+  for(const width of [1.5,BLACKOUT_RULES.corridorWidth]){
+    const inset=wallInset(width),g=createWallShell(walls,unit,inset,.94,.47,pad),triangles=verifyExterior(g,walls,unit,inset,.94,.47,pad);
+    for(let z=0;z<MAP.length;z++)for(let x=0;x<MAP[z].length;x++)if(isOpen(x,z))assert.equal(topCovers(triangles,(x-7)*unit,(z-7)*unit),false);
+    for(let x=-18.19;x<18;x+=.83)for(let z=-18.17;z<18;z+=.79)assert.equal(topCovers(triangles,x,z),occupied(walls,unit,inset,pad,x,z));
+    assert.ok(Number.isFinite(g.boundingSphere.radius));g.dispose();
+  }
 });
 
 test('touching, separated, duplicate and empty walls are handled without nonfinite geometry',()=>{
