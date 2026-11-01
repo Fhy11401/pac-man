@@ -1,3 +1,4 @@
+import {faceReveal,OPENING_REVEAL_AT} from './scare-timing.js';
 import {cloneAttendant} from './enemy-model.js';
 import {AttendantMotion,poseAttendant} from './attendant-motion.js';
 import * as THREE from '../vendor/three.module.js';
@@ -28,9 +29,10 @@ export function buildOpeningScene(v,world,unit){
   else{const pose=securityCameraPoses(v.corridorWidth,unit)[0];camera.position.copy(pose.position);camera.lookAt(pose.target);}
   camera.updateMatrixWorld(true);
   const motion=new AttendantMotion(),aimCamera=camera.clone(),headPoint=new THREE.Vector3(),approachVector=new THREE.Vector3();let lastTime=null,lensThreat=0;
-  if(path){const stop=world(path.x,path.from+(path.to-path.from)*.46);approachVector.copy(camera.position).sub(stop);approachVector.y=0;approachVector.multiplyScalar(Math.max(0,1-.70/approachVector.length()));}
+  if(path){const stop=world(path.x,path.from+(path.to-path.from)*.46);approachVector.copy(camera.position).sub(stop);approachVector.y=0;approachVector.multiplyScalar(Math.max(0,1-.53/approachVector.length()));}
+  const revealLight=new THREE.SpotLight(0xeee5d5,0,3,.85,.7,1);v.scene.add(revealLight,revealLight.target);
   function update(game,playerCamera){
-    const watching=game.blackout?.introShot==='monitor';actor.visible=watching&&Boolean(path);if(!watching){lastTime=null;lensThreat=0;return false;}
+    const watching=game.blackout?.introShot==='monitor';actor.visible=watching&&Boolean(path);if(!watching){revealLight.intensity=0;lastTime=null;lensThreat=0;return false;}
     const time=game.blackout.introTime??0,pose=openingWalk(time);actor.visible=actor.visible&&pose.visible;lensThreat=pose.lensThreat;
     if(path){
       const distance=(path.to-path.from)*unit,approachDistance=approachVector.length(),speed=p=>p.strike>0?0:Math.hypot(p.speed*distance,p.approachSpeed*approachDistance);
@@ -44,11 +46,11 @@ export function buildOpeningScene(v,world,unit){
       actor.updateMatrixWorld(true);model.head.getWorldPosition(headPoint);
       const horizontal=Math.hypot(camera.position.x-headPoint.x,camera.position.z-headPoint.z);
       model.head.rotation.x=-Math.atan2(camera.position.y-headPoint.y,horizontal)*pose.glance-model.body.rotation.x;
-      aimCamera.lookAt(headPoint);
+      aimCamera.lookAt(headPoint);revealLight.position.copy(camera.position);revealLight.target.position.copy(headPoint);revealLight.intensity=faceReveal(time,OPENING_REVEAL_AT)*3.2;
     }
     lastTime=time;
 
     playerCamera.position.copy(camera.position);playerCamera.quaternion.copy(camera.quaternion).slerp(aimCamera.quaternion,smooth(pose.approach));playerCamera.fov=42;playerCamera.updateProjectionMatrix();return true;
   }
-  return{actor,model,camera,path,get lensThreat(){return lensThreat;},label:hall?.label.split(' / ')[0]??'公共区域',update};
+  return{actor,model,camera,path,revealLight,get lensThreat(){return lensThreat;},label:hall?.label.split(' / ')[0]??'公共区域',update};
 }

@@ -1,5 +1,6 @@
+import {OPENING_REVEAL_AT} from './scare-timing.js';
 // A short visual sequence; the actual hotel power objective stays unrepaired.
-import {OPENING_STRIKE_AT,OPENING_CUT_AT} from './opening-timing.js';
+import {OPENING_CUT_AT} from './opening-timing.js';
 export const INTRO_STAGES=Object.freeze([
   {mode:'mains',shot:'monitor',duration:OPENING_CUT_AT,event:'monitor-watch'},
   {mode:'blackout',shot:'outage',duration:1.4,event:'mains-fail'},
@@ -13,7 +14,7 @@ export class BlackoutIntro{
   update(dt){
     if(!this.active||!Number.isFinite(dt)||dt<=0)return;
     this.remaining-=Math.min(dt,.1);
-    if(this.index===0&&!this.strikePlayed&&OPENING_CUT_AT-this.remaining>=OPENING_STRIKE_AT){this.strikePlayed=true;this.onEvent('lens-strike');}
+    if(this.index===0&&!this.strikePlayed&&OPENING_CUT_AT-this.remaining>=OPENING_REVEAL_AT){this.strikePlayed=true;this.onEvent('lens-strike');}
     while(this.active&&this.remaining<=0){
       if(++this.index>=INTRO_STAGES.length){const game=this.game;this.stop();this.onComplete(game);break;}
       const next=INTRO_STAGES[this.index];this.remaining+=next.duration;this.present();this.onEvent(next.event);

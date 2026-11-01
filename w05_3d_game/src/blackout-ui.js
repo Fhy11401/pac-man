@@ -138,7 +138,7 @@ export class BlackoutUI{
       const power=interaction.kind==='power',roomDoor=interaction.kind==='room-door',repair=power&&!b.powerOn,progress=clamp(interaction.progress??(power?b.repairProgress:0));
       setText(this.el['blackout-interaction-key'],interaction.kind==='monitor'?'M':'E');
       setText(this.el['blackout-interaction-label'],power?(b.powerOn?'电力已恢复':'维修配电箱'):interaction.label);
-      setText(this.el['blackout-interaction-note'],repair?'持续按住，松开即停止维修':roomDoor?'快速操作会发声 · 按住可安静操作':power?'返回监控室，在门内合上机械门':interaction.kind==='battery'?`补充 ${R.batteryPickup} 秒电量，满电时保留`:interaction.kind==='monitor'?'连接远程监控，危险不会暂停':interaction.kind==='bed'?(b.hidden?'Tab 操作手机 · M 连接监控':'按 E 藏身，避免在巡夜人眼前进入'):b.doorClosed?'打开后再通过':'合上门扇');
+      setText(this.el['blackout-interaction-note'],repair?'持续按住，松开即停止维修':roomDoor?'快速操作会发声 · 按住可安静操作':power?'返回监控室，在门内合上机械门':interaction.kind==='battery'?`补充 ${R.batteryPickup} 秒电量，满电时保留`:interaction.kind==='monitor'?'连接远程监控，危险不会暂停':interaction.kind==='bed'?(b.hidden?'Tab 操作手机 · M 连接监控':'按 E 藏身，避免在最后的住客眼前进入'):b.doorClosed?'打开后再通过':'合上门扇');
       this.el['blackout-repair'].hidden=!(repair||roomDoor);this.el['blackout-repair'].setAttribute('aria-label',roomDoor?'客房门静音操作进度':'配电箱维修进度');
       this.el['blackout-repair-fill'].style.transform=`scaleX(${progress})`;setText(this.el['blackout-repair-value'],roomDoor?`${Math.round(progress*100)}%`:`${(progress*R.repairSeconds).toFixed(1)} / ${R.repairSeconds}s`);
       this.el['blackout-repair'].setAttribute('aria-valuenow',String(Math.round(progress*100)));

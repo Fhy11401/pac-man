@@ -1,3 +1,5 @@
+import {setThreatExposure} from './threat-lighting.js';
+import {faceReveal,OPENING_REVEAL_AT,DEATH_REVEAL_AT,DEATH_LUNGE_SECONDS} from './scare-timing.js';
 import {AttendantMotion,poseAttendant,smoothAttendantHeading} from './attendant-motion.js';
 import {buildOpeningScene} from './opening-scene.js';
 import {DEFAULT_TUNING} from './tuning.js';
@@ -41,7 +43,7 @@ export class WorldView {
     this.reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');this.motionEnabled=!this.reducedMotion.matches;
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#0d0b11');this.scene.fog=new THREE.Fog('#0d0b11',10,28);
     this.camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.045,70);this.camera.rotation.order='YXZ';
-    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(renderPixelRatio(innerWidth,innerHeight,devicePixelRatio));this.renderer.setSize(innerWidth,innerHeight);this.renderer.transmissionResolutionScale=.5;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.672;this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.append(this.renderer.domElement);this.renderer.domElement.tabIndex=0;
+    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(renderPixelRatio(innerWidth,innerHeight,devicePixelRatio)*(this.resolutionScale??1));this.renderer.setSize(innerWidth,innerHeight);this.renderer.transmissionResolutionScale=.5;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.672;this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.append(this.renderer.domElement);this.renderer.domElement.tabIndex=0;
     this.environmentTarget=hotelEnvironment(this.renderer);this.scene.environment=this.environmentTarget.texture;
     this.hemisphereLight=new THREE.HemisphereLight(0xc6c8c6,0x48414b,.19);this.scene.add(this.hemisphereLight);
     this.ambientLight=new THREE.AmbientLight(0xadb1b2,.07);this.scene.add(this.ambientLight);
@@ -49,7 +51,7 @@ export class WorldView {
     this.cameraLight=new THREE.PointLight(0xbcc1bb,.18,3.5,2);this.scene.add(this.cameraLight);
     this.assetJobs=[];this.mat=makeHotelMaterials(this.assetJobs,this.ceilingHeight,MAP_WIDTH,MAP_HEIGHT);this.detailAudit={crookedPictures:0,ajarDoors:0,luggage:0,maxPropProjection:0};
     this.hallDefinitions=IS_MAP_DRAFT?[]:BLACKOUT_LAYOUT.halls??[];this.hallAt=(x,z)=>hallAt(this.hallDefinitions,x,z);
-    this.buildMap();this.halls=buildHalls(this,world,UNIT,this.hallDefinitions,isOpen);decorateHotel(this,world,UNIT);decorateMapLandmarks(this,world,UNIT);addContactOcclusion(this,world,UNIT);this.blackoutPreparation=prepareBlackoutWorld(this,world,UNIT);this.batchStaticMeshes();this.freezeStaticWorld();this.finishLegacyDoors();this.safeRoom=buildSafeRoom(this,world,UNIT);this.buildShards();this.buildExit();this.buildEnemy();this.assetJobs.push(applyHotelAsset(this.attendantMat.porcelain,'leather',{repeat:[3,1.5],normalScale:.32}));this.buildScare();this.blackoutView=buildBlackoutView(this,world,UNIT);this.securityRooms=buildSecurityRooms(this,world,UNIT);this.openingScene=buildOpeningScene(this,world,UNIT);
+    this.buildMap();this.halls=buildHalls(this,world,UNIT,this.hallDefinitions,isOpen);decorateHotel(this,world,UNIT);decorateMapLandmarks(this,world,UNIT);addContactOcclusion(this,world,UNIT);this.blackoutPreparation=prepareBlackoutWorld(this,world,UNIT);this.batchStaticMeshes();this.freezeStaticWorld();this.finishLegacyDoors();this.safeRoom=buildSafeRoom(this,world,UNIT);this.buildShards();this.buildExit();this.buildEnemy();this.buildScare();this.blackoutView=buildBlackoutView(this,world,UNIT);this.securityRooms=buildSecurityRooms(this,world,UNIT);this.openingScene=buildOpeningScene(this,world,UNIT);
     // Static shadow maps update only when a pool slot moves to another real fixture.
     // Downward cones keep the warm light local and prevent light leaking through walls.
     this.lights=Array.from({length:10},()=>{const light=new THREE.SpotLight(0xffd29f,10,6.2,Math.PI/3.1,.78,2);light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.camera.near=.06;light.shadow.bias=-.00015;light.shadow.normalBias=.025;light.shadow.autoUpdate=false;light.userData.fixture=-1;this.scene.add(light,light.target);return light;});this.lightClock=1;
@@ -124,7 +126,7 @@ export class WorldView {
     this.film?.dispose();this.environmentTarget?.dispose();this.renderer.dispose();this.renderer.domElement.remove();
   }
   updateFov(){const next=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(this.horizontalFov+this.playerMotion.fov)/2)/Math.max(1.6,this.camera.aspect)));if(Math.abs(next-this.camera.fov)>1e-7||this.projectionAspect!==this.camera.aspect){this.camera.fov=next;this.projectionAspect=this.camera.aspect;this.camera.updateProjectionMatrix();}}
-  resizePlayerView(){this.camera.aspect=innerWidth/innerHeight;this.updateFov();this.renderer.setPixelRatio(renderPixelRatio(innerWidth,innerHeight,devicePixelRatio));this.renderer.setSize(innerWidth,innerHeight);this.film.resize();}
+  resizePlayerView(){this.camera.aspect=innerWidth/innerHeight;this.updateFov();this.renderer.setPixelRatio(renderPixelRatio(innerWidth,innerHeight,devicePixelRatio)*(this.resolutionScale??1));this.renderer.setSize(innerWidth,innerHeight);this.film.resize();}
   setSecurityMonitor(active,channel=0,container=null){if(this.disposed)return false;return this.security.set(active,channel,container??globalThis.document?.getElementById?.('monitor-feed'));}
   renderTitle(kind='menu'){
     if(this.disposed)return false;this.setSecurityMonitor(false);
@@ -194,15 +196,14 @@ export class WorldView {
     this.scareScene=new THREE.Scene();this.scareCamera=new THREE.PerspectiveCamera(42,this.camera.aspect,.02,8);
     this.scareFace=attendantHead(this.attendantMat);this.scareScene.add(this.scareFace);
     const coat=this.attendantMat.coat;
-    const shoulders=this.mesh(new THREE.CylinderGeometry(.18,.43,.6,28),coat,this.scareFace);shoulders.position.set(0,-.56,-.10);
-    for(const side of [-1,1]){const collar=this.box(.12,.20,.055,this.mat.black,side*.12,-.31,.04,this.scareFace);collar.rotation.z=side*.38;}
-    for(const y of [-.46,-.61,-.76])this.box(.022,.022,.02,this.mat.brass,0,y,.21,this.scareFace);
-    this.scareScene.add(new THREE.AmbientLight(0x8a6a70,.24));const red=new THREE.PointLight(0xff3527,.85,4,1);red.position.set(-.55,.3,-.10);this.scareScene.add(red);
-    const cold=new THREE.PointLight(0xe4dece,2.1,3,1);cold.position.set(.62,.45,-.13);this.scareScene.add(cold);
+    const shoulders=this.mesh(new THREE.CylinderGeometry(.095,.36,.6,28),coat,this.scareFace);shoulders.position.set(0,-.49,-.10);
+    this.scareAmbient=new THREE.AmbientLight(0x8a6a70,.24);this.scareScene.add(this.scareAmbient);const red=new THREE.PointLight(0xff3527,.85,4,1);red.position.set(-.55,.3,-.10);this.scareScene.add(red);
+    const cold=new THREE.PointLight(0xe4dece,2.1,3,1);cold.position.set(.62,.45,-.13);this.scareScene.add(cold);this.scareKey=cold;this.scareRim=red;
   }
   drawScare(game,time){
     if(game.phase!=='caught')return;
     const t=RULES.caughtSeconds-game.caught;if(t<SCARE_TURN_SECONDS)return;
+    const reveal=faceReveal(t,DEATH_REVEAL_AT);this.scareAmbient.intensity=.012+.228*reveal;this.scareKey.intensity=2.1*reveal;this.scareRim.intensity=.025+.825*reveal;
     this.scareCamera.aspect=this.camera.aspect;this.scareCamera.updateProjectionMatrix();
     const previous=this.scarePlacement;
     if(!previous||previous.game!==game||previous.deaths!==game.deaths||previous.aspect!==this.camera.aspect){
@@ -246,7 +247,7 @@ export class WorldView {
       const finish=fit(Math.max(height,Math.min(2.12,height*1.07)),{x:0,y:.02},new THREE.Quaternion(),-start.position.z);
       this.scarePlacement={game,deaths:game.deaths,aspect,fov:this.camera.fov,start:start.position,finish:finish.position,rotation,scale,worldBounds,startBounds:start.bounds,endBounds:finish.bounds};
     }
-    const placement=this.scarePlacement,p=Math.min(1,(t-SCARE_TURN_SECONDS)/.22),ease=this.motionEnabled?1-(1-p)**3:0;
+    const placement=this.scarePlacement,p=Math.min(1,(t-SCARE_TURN_SECONDS)/DEATH_LUNGE_SECONDS),ease=this.motionEnabled?1-(1-p)**3:0;
     this.scareFace.position.copy(placement.start).lerp(placement.finish,ease);
     this.scareFace.quaternion.copy(placement.rotation).slerp(new THREE.Quaternion(),ease);
     // The lunge begins at the captured apparent size. Only the short final motion shakes.
@@ -287,6 +288,7 @@ export class WorldView {
     const underBed=Boolean(game.blackout?.bedHide),motion=this.playerMotion.update(underBed?0:speed,dt,this.motionTuning,{active:active&&game.phase==='playing',motion:this.motionEnabled&&!this.reducedMotion.matches,scale:underBed?0:motionScale,turnRate});this.updateFov();
     if(game.phase!=='caught')this.bedEyeHeight=bedViewHeight(game.blackout,this.eyeHeight);
     this.camera.position.copy(world(game.player.x,game.player.z,(this.bedEyeHeight??this.eyeHeight)+motion.bob));this.camera.position.x+=Math.cos(yaw)*motion.sway;this.camera.position.z-=Math.sin(yaw)*motion.sway;this.camera.rotation.set(pitch+motion.pitch,yaw,0,'YXZ');const openingMonitor=this.openingScene?.update(game,this.camera)??false;this.cameraLight.position.copy(this.camera.position);
+    const reveal=openingMonitor?faceReveal(game.blackout.introTime??0,OPENING_REVEAL_AT):game.phase==='caught'?faceReveal(RULES.caughtSeconds-game.caught,DEATH_REVEAL_AT):1;setThreatExposure(this.attendantMat,.012+.988*reveal);
     this.blackoutView.update(game,dt);
     this.securityRooms?.update(game,dt);
     const es=Math.hypot(game.enemyVelocity.x,game.enemyVelocity.z);

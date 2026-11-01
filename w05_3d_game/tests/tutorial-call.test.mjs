@@ -150,3 +150,11 @@ test('declining or ignoring a call never starts the tutorial and releases the ph
  const {call,nodes,events}=fixture();call.startIncoming();nodes['call-decline'].onclick();assert(!call.busy);assert.equal(events.open,0);assert.equal(events.close,1);call.update(60);assert.equal(events.close,1);
  call.startIncoming();call.update(30);assert(!call.busy);assert.equal(events.open,0);assert.equal(events.close,2);call.stop();call.update(60);assert.equal(events.close,2);
 });
+
+test('incoming and connected calls isolate phone controls until decline or hangup',()=>{
+  const {call,nodes}=fixture();
+  call.startIncoming();assert.equal(nodes['phone-apps'].hidden,true);assert.equal(nodes['phone-apps'].inert,true);
+  nodes['call-answer'].onclick();assert.equal(call.open,true);assert.equal(nodes['phone-apps'].inert,true);
+  nodes['call-hangup'].onclick();assert.equal(nodes['phone-apps'].hidden,false);assert.equal(nodes['phone-apps'].inert,false);
+  call.startIncoming();nodes['call-decline'].onclick();assert.equal(nodes['phone-apps'].hidden,false);assert.equal(nodes['phone-apps'].inert,false);
+});

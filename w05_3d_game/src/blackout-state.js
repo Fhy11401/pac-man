@@ -325,6 +325,7 @@ function operateMonitor(game){
 }
 function handleAction(game,action,interaction){
   const b=game.blackout;if(!action)return;
+  if(action==='office-door'){if(isInSafeRoom(game.player)&&!b.hidden&&!b.monitor&&!b.monitorConnecting)operateDoor(game);return;}
   if(action==='phone'){
     cancelRoomHold(game);b.phoneOpen=!b.phoneOpen;b.monitor=false;b.monitorConnecting=0;game.events.push('phone');return;
   }

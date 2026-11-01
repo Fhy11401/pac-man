@@ -15,18 +15,18 @@ export class MenuView {
     this.disposed=false;this.kind='menu';this.frames=0;this.configure('menu',16/9);
   }
   configure(outcome,aspect){
-    this.kind=['lost','won'].includes(outcome)?outcome:'menu';
+    this.kind=['lost','won','extras'].includes(outcome)?outcome:'menu';
     const nextAspect=Number.isFinite(aspect)&&aspect>0?aspect:16/9;
     if(this.camera.aspect!==nextAspect){this.camera.aspect=nextAspect;this.camera.updateProjectionMatrix();}
     const distanceScale=Math.max(1,1.6/nextAspect),halfWidth=Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2))*1.08*distanceScale*nextAspect;
     this.portrait.position.x=halfWidth*.52;this.portrait.position.z=-1.20*distanceScale;this.portrait.visible=this.kind!=='won';
     this.portrait.position.y=this.kind==='lost'?-1.525:-1.54;
-    this.portrait.rotation.set(.012,this.kind==='lost'?-.105:-.18,this.kind==='lost'?-.018:0);
+    this.portrait.rotation.set(.012,this.kind==='extras'?this.showcaseAngle??0:this.kind==='lost'?-.105:-.18,this.kind==='lost'?-.018:0);
     const faceX=this.portrait.position.x;
-    this.key.position.set(faceX+.47,.34,this.portrait.position.z+.68);this.fill.position.set(faceX-.46,.02,this.portrait.position.z+.85);
-    this.key.color.setHex(this.kind==='lost'?0xb3453c:0xc8cbb8);this.key.intensity=this.kind==='lost'?.72:.86;
-    this.fill.color.setHex(this.kind==='lost'?0x6b3432:0x788b82);this.fill.intensity=this.kind==='lost'?.10:.15;
-    this.ambient.intensity=this.kind==='lost'?.045:.065;
+    this.key.position.set(faceX+.52,.29,this.portrait.position.z+.12);this.fill.position.set(faceX-.46,.02,this.portrait.position.z+.30);
+    this.key.color.setHex(this.kind==='lost'?0xb3453c:0xc8cbb8);this.key.intensity=this.kind==='extras'?1.65:this.kind==='lost'?.40:.30;
+    this.fill.color.setHex(this.kind==='lost'?0x6b3432:0x788b82);this.fill.intensity=this.kind==='extras'?.35:this.kind==='lost'?.025:.015;
+    this.ambient.intensity=this.kind==='extras'?.18:this.kind==='lost'?.020:.015;
     this.scene.background.setHex(this.kind==='lost'?0x050102:this.kind==='won'?0x080c0a:0x020302);
     this.scene.updateMatrixWorld(true);this.camera.updateMatrixWorld(true);
   }
@@ -37,10 +37,10 @@ export class MenuView {
     try{
       // The live scene can be powered off. Portrait reflection is calibrated
       // independently for this pass, then all shared material uniforms restore.
-      for(const [material,base] of this.materials){previous.push([material,material.envMapIntensity]);material.envMapIntensity=base*.48;}
-      renderer.toneMappingExposure=this.kind==='lost'?.62:this.kind==='won'?.48:.72;if(sensor)sensor.value=0;
+      for(const [material,base] of this.materials){previous.push([material,material.envMapIntensity,material.userData?.threatExposure?.value]);material.envMapIntensity=base*(this.kind==='extras'?.32:.12);if(material.userData?.threatExposure)material.userData.threatExposure.value=this.kind==='extras'?.86:.42;}
+      renderer.toneMappingExposure=this.kind==='lost'?.62:this.kind==='won'?.48:this.kind==='extras'?.82:.58;if(sensor)sensor.value=0;
       film.render(this.scene,this.camera,undefined,.20);this.frames++;return true;
-    }finally{renderer.toneMappingExposure=exposure;if(sensor)sensor.value=previousSensor;for(const [material,value] of previous)material.envMapIntensity=value;}
+    }finally{renderer.toneMappingExposure=exposure;if(sensor)sensor.value=previousSensor;for(const [material,value,exposure] of previous){material.envMapIntensity=value;if(material.userData?.threatExposure)material.userData.threatExposure.value=exposure;}}
   }
   dispose(){if(this.disposed)return;this.disposed=true;this.scene.clear();this.materials.clear();}
 }

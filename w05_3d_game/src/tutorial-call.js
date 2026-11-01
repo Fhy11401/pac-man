@@ -20,12 +20,12 @@ export const TUTORIAL_LINES=Object.freeze([
     6.623617
   ],
   [
-    "出发前，你得先了解一下巡夜人。",
+    "出发前，你得先了解一下最后的住客。",
     "Before you head out, there's something you need to know about the attendant.",
     11.904255
   ],
   [
-    "在黑暗走廊里，他靠声音找到你。",
+    "在黑暗走廊里，它靠声音找到你。",
     "In the dark corridors, it relies on sound to find you.",
     15.571489
   ],
@@ -45,7 +45,7 @@ export const TUTORIAL_LINES=Object.freeze([
     23.754043
   ],
   [
-    "想引开巡夜人，按 1 拨响 201 客房，按 2 拨响 202。",
+    "想引开最后的住客，按 1 拨响 201 客房，按 2 拨响 202。",
     "To lure the attendant away, press one to ring room two oh one, or two for room two oh two.",
     26.194043
   ],
@@ -55,7 +55,7 @@ export const TUTORIAL_LINES=Object.freeze([
     32.888085
   ],
   [
-    "如果他看见你藏起来，就可能进房间搜查。",
+    "如果它看见你藏起来，就可能进房间搜查。",
     "If it sees you hide, it may search your room.",
     36.745532
   ],
@@ -70,7 +70,7 @@ export const TUTORIAL_LINES=Object.freeze([
     43.417872
   ],
   [
-    "回到监控室，把他留在外面，再关上门。",
+    "回到监控室，把它留在外面，再关上门。",
     "Return to the control room, leave it outside, and close the door.",
     45.228511
   ],
@@ -91,7 +91,7 @@ const clock=value=>`${Math.floor(value/60).toString().padStart(2,'0')}:${Math.fl
 export class TutorialCall{
   constructor({onIncoming=()=>{},onOpen=()=>{},onClose=()=>{},onRing=()=>{},sound=null,doc=document,createAudio=()=>new Audio(),audioConfig=TUTORIAL_AUDIO_CONFIG}={}){
     this.onIncoming=onIncoming;this.onOpen=onOpen;this.onClose=onClose;this.onRing=onRing;this.sound=sound;this.audioConfig=audioConfig;this.audioReady=narrationReady(audioConfig);
-    this.el=Object.fromEntries(['tablet','tutorial-call','call-hangup','call-answer','call-decline','call-caption','call-caller','call-duration','call-hold','call-hold-label','call-speaker'].map(id=>[id,doc.getElementById(id)]));
+    this.el=Object.fromEntries(['tablet','phone-apps','tutorial-call','call-hangup','call-answer','call-decline','call-caption','call-caller','call-duration','call-hold','call-hold-label','call-speaker'].map(id=>[id,doc.getElementById(id)]));
     this.state='idle';this.index=0;this.sentenceIndex=0;this.active=true;this.held=false;this.elapsed=0;this.advance=0;this.generation=0;this.playAttempt=0;this.disposed=false;this.audioMode='captions';this.localMuted=false;this.ended=false;
     this.audio=createAudio();this.audio.preload='none';this.audio.volume=.85;this.audio.defaultPlaybackRate=1;this.audio.playbackRate=1;
     this.el['call-hangup'].onclick=()=>this.close();this.el['call-answer'].onclick=()=>{if(this.active&&this.ringing)this.startConnected();};this.el['call-decline'].onclick=()=>this.close();
@@ -102,7 +102,7 @@ export class TutorialCall{
   get ringing(){return this.state==='ringing';}
   get busy(){return this.open||this.ringing;}
   startIncoming(){if(this.disposed)return;this.stop();this.state='ringing';this.ringClock=0;this.ringElapsed=0;this.el['tutorial-call'].dataset.state='ringing';this.el['call-duration'].textContent='酒店内线来电';this.syncVisibility();this.onIncoming();this.onRing();if(this.active)this.el['call-answer'].focus({preventScroll:true});}
-  syncVisibility(){const hidden=!this.active||!this.busy;this.el['tutorial-call'].hidden=hidden;this.el['tutorial-call'].inert=hidden;this.el.tablet.dataset.call=String(!hidden);this.el['call-caption'].hidden=hidden||!this.open;}
+  syncVisibility(){const hidden=!this.active||!this.busy;this.el['tutorial-call'].hidden=hidden;this.el['tutorial-call'].inert=hidden;this.el.tablet.dataset.call=String(!hidden);this.el['phone-apps'].hidden=this.busy;this.el['phone-apps'].inert=this.busy;this.el['call-caption'].hidden=hidden||!this.open;}
   syncControls(){
     const state=`${this.held}|${this.audioMode}|${this.audio.muted}`;if(this.controlState===state)return;this.controlState=state;
     this.el['call-hold'].setAttribute('aria-pressed',String(this.held));this.el['call-hold-label'].textContent=this.held?'继续':'保留';

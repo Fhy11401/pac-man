@@ -1,7 +1,8 @@
+import {OPENING_REVEAL_AT} from '../src/scare-timing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BlackoutIntro} from '../src/blackout-intro.js';
-import {OPENING_STRIKE_AT,OPENING_CUT_AT} from '../src/opening-timing.js';
+import {OPENING_CUT_AT} from '../src/opening-timing.js';
 test('outage precedes backup power and the optional call without completing repairs',()=>{
  const events=[],game={blackout:{powerOn:false}},intro=new BlackoutIntro({onEvent:e=>events.push(e),onComplete:g=>{assert.equal(g,game);events.push('call');}});
  intro.start(game);assert.equal(game.blackout.introLighting,'mains');assert.equal(game.blackout.introShot,'monitor');assert.equal(game.blackout.introTime,0);
@@ -20,7 +21,7 @@ test('the strike cue fires once on the animation clock across frame rates and re
   const strikes=[],game={blackout:{}},intro=new BlackoutIntro({onEvent:event=>{if(event==='lens-strike')strikes.push(OPENING_CUT_AT-intro.remaining);}});
   for(let run=0;run<2;run++){
    intro.start(game);for(let i=0;i<Math.ceil(13.1*fps);i++){intro.update(1/fps);const count=strikes.length;intro.update(0);assert.equal(strikes.length,count);}
-   assert.equal(strikes.length,run+1);assert.ok(strikes[run]>=OPENING_STRIKE_AT&&strikes[run]<OPENING_STRIKE_AT+1/fps+1e-8);intro.stop();
+   assert.equal(strikes.length,run+1);assert.ok(strikes[run]>=OPENING_REVEAL_AT&&strikes[run]<OPENING_REVEAL_AT+1/fps+1e-8);intro.stop();
   }
  }
 });
