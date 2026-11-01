@@ -2,6 +2,7 @@ import {createGame,tick,getBlackoutInteraction,blackoutSight} from './core.js';
 import {BLACKOUT_RULES,BLACKOUT_LAYOUT} from './blackout-layout.js';
 import {BlackoutUI} from './blackout-ui.js';
 import {BlackoutIntro} from './blackout-intro.js';
+import {openingWalk} from './opening-scene.js';
 import {TutorialCall} from './tutorial-call.js';
 import {DoorInput} from './door-input.js';
 import {SHARDS,RULES,START_YAW,IS_MAP_DRAFT,IS_HOTEL_DRAFT,HOTEL_DOCUMENT,MAP_DRAFT_ERROR,MAP_DOCUMENT,isInSafeRoom,distance} from './world.js';
@@ -10,6 +11,7 @@ import {WorldView} from './view.js';
 import {drawMap} from './map-view.js';
 import {dangerGlowOpacity} from './visibility.js';
 import {Sound} from './audio.js';
+import {HeartbeatHUD} from './heartbeat-hud.js';
 import {MouseLook,MouseResistance,MOUSE_RADIANS_PER_PIXEL} from './look-input.js';
 import {DEFAULT_TUNING,TUNING_GROUPS,TUNING_FIELDS,MOVEMENT_KEYS,formatTuning} from './tuning.js';
 const mouseLook=new MouseLook(),mouseResistance=new MouseResistance();
@@ -34,6 +36,7 @@ for(const group of TUNING_GROUPS){
 }
 const makeGame=(nextMode='human')=>createGame(settings,nextMode==='demo'||IS_MAP_DRAFT?{}:{mode:'blackout'});
 let game=makeGame(),bot=new DemoController(),view,screen='notice',mode='human',yaw=START_YAW,pitch=0,keys=new Set(),hadPointerLock=false;
+const heartbeatHUD=new HeartbeatHUD($('heartbeat-hud'));
 const blackoutUI=new BlackoutUI({onAction(action){
   if(screen!=='playing'||game.phase!=='playing'||!game.blackout)return;
   if(action.type==='monitor-channel'){renderDirty=true;return;}
@@ -84,8 +87,15 @@ function requestPointer(){
   const fallback=()=>{if(canLook())announce('点击画面恢复鼠标控制；也可按住左键转向。',3500);};
   try{canvas.requestPointerLock?.()?.catch(fallback);}catch{fallback();}
 }
+function updateOpeningUI(){
+  const shot=intro.active?game.blackout?.introShot:'';document.body.dataset.opening=shot??'';
+  $('opening-monitor').hidden=shot!=='monitor'||screen!=='playing';
+  $('opening-monitor').style.setProperty('--interference',shot==='monitor'?openingWalk(game.blackout.introTime??0).interference:0);
+  $('opening-cut').hidden=!['outage','crank'].includes(shot)||screen!=='playing';
+  if(shot==='monitor'){$('opening-camera-title').textContent=view?.openingScene?.label??'接待大厅';$('opening-time').textContent=`00:00:${String(Math.floor(game.blackout.introTime??0)).padStart(2,'0')}`;}
+}
 function updateScreen(){
-  renderDirty=true;
+  renderDirty=true;updateOpeningUI();
   hide('error-panel',screen!=='error');
   hide('content-notice',screen!=='notice');
   hide('menu',!['menu','settings','developer'].includes(screen));hide('hud',['menu','settings','developer','notice','error','result'].includes(screen));hide('pause-panel',!['paused','settings'].includes(screen));hide('developer-panel',screen!=='developer');hide('result',screen!=='result');hide('pause-button',!['playing','paused'].includes(screen));hide('demo-bar',mode!=='demo'||screen!=='playing');hide('respawn',game.phase!=='respawn'||screen!=='playing');
@@ -106,7 +116,7 @@ function start(nextMode='human'){
   quickTurn.cancel();
   rebuildCorridors();if(!sceneReady)return;mode=nextMode;game=makeGame(nextMode);bot=new DemoController();yaw=START_YAW;pitch=0;clearKeys();mouseLook.cancelDrag();mouseResistance.reset();demoClock=0;resultDelay=0;screen='playing';scareLook=null;sound.unlock();sound.setPaused(false);sound.event('start');$('toast').classList.remove('show');updateScreen();updateHUD();if(mode==='human'&&!game.blackout)requestPointer();else releasePointer();lastFrame=performance.now();
   sound.opening?.stop();intro.stop();tutorialCall.stop();
-  if(mode==='human'&&game.blackout){intro.start(game);updateHUD();}
+  if(mode==='human'&&game.blackout){intro.start(game);updateOpeningUI();updateHUD();}
   else if(mode==='human')announce('地图草稿巡检：WASD 移动，E 拆开木板。草稿沿用收集规则。',5000);
 }
 function menu(message=(IS_MAP_DRAFT?`草稿试玩 · ${MAP_DOCUMENT.name} · `:'')+'电脑键盘与鼠标游玩 · 建议佩戴耳机'){
@@ -242,7 +252,7 @@ function frame(now){
     updateBedLook();
     if(wasMonitoring!==Boolean(game.blackout?.monitor)||wasPhoneBusy!==phoneBusy()){clearKeys();quickTurn.cancel();mouseLook.cancelDrag();updateHUD();if(phoneBusy())releasePointer();else requestPointer();}
     if(tutorialCall.busy&&game.phase!=='playing')tutorialCall.stop();
-    intro.update(dt);tutorialCall.update(dt);
+    intro.update(dt);updateOpeningUI();tutorialCall.update(dt);
     if(events.includes('power-on'))announce('酒店供电已恢复。巡夜人现在能在灯下看见你：返回监控室，确认它留在门外，再关门。',6500);
     if(events.includes('door-blocked'))announce('门口有阻挡，请离开门轨再关门。',2200);
     if(events.includes('battery-empty'))announce('夜视电池已耗尽。F 可打开手电，留意沿路备用电池。',3500);
@@ -268,6 +278,7 @@ function frame(now){
     sound.updateBlackout(dt,game,yaw,blackoutSight);
   }
   if(screen==='playing'&&game.phase==='playing')drawMap($('minimap'),game,yaw,settings.zoom,settings.localMapScale);
+  heartbeatHUD.update(sound,{visible:screen==='playing'&&game.phase==='playing'&&!intro.active&&!game.blackout?.monitor&&!tutorialCall.busy,reduced});
   const caughtTime=RULES.caughtSeconds-game.caught;
   $('death-shade').style.opacity=screen==='playing'?(game.phase==='caught'?Math.max(0,Math.min(1,(caughtTime-.72)/.25)):game.phase==='respawn'?Math.min(1,game.respawn/.3):0):0;
   $('respawn').style.opacity=Math.min(1,game.respawn/.3);

@@ -278,7 +278,7 @@ function lapelGeometry(side){
 }
 
 export function createAttendant(m){
-  const root=new THREE.Group(),body=new THREE.Group();root.add(body);
+  const root=new THREE.Group(),body=new THREE.Group();body.name='attendant-body';root.add(body);
   mesh(body,coatGeometry(),m.coat);
   mesh(body,new THREE.CylinderGeometry(.092,.115,.15,20),m.shirt,0,1.42,0,[1,1,.8]);
   for(const side of [-1,1]){
@@ -298,11 +298,11 @@ export function createAttendant(m){
   const head=attendantHead(m);head.position.set(0,1.64,.026);body.add(head);
   const limbs=[];
   for(const side of [-1,1]){
-    const arm=new THREE.Group();arm.position.set(side*.276,1.30,0);body.add(arm);
+    const arm=new THREE.Group();arm.name=`attendant-arm-${side}`;arm.position.set(side*.276,1.30,0);body.add(arm);
     const upper=mesh(arm,sleeveGeometry(true),m.coat,side*.019,0,-.004);upper.rotation.z=side*.045;
     mesh(arm,curveTube([[side*.061,-.04,0],[side*.070,-.14,.004],[side*.049,-.25,.006]],.002,9),m.lapel);
     batchRigid(arm);
-    const elbow=new THREE.Group();elbow.position.set(side*.024,-.29,0);elbow.rotation.x=-.22;arm.add(elbow);
+    const elbow=new THREE.Group();elbow.name=`attendant-elbow-${side}`;elbow.position.set(side*.024,-.29,0);elbow.rotation.x=-.22;arm.add(elbow);
     mesh(elbow,sleeveGeometry(false),m.coat);
     mesh(elbow,new THREE.CylinderGeometry(.057,.055,.043,16),m.lapel,0,-.235,0);
     for(const y of [-.221,-.242])mesh(elbow,new THREE.SphereGeometry(.005,8,6),m.brass,side*.053,y,.015);
@@ -312,14 +312,26 @@ export function createAttendant(m){
     }
     mesh(elbow,new THREE.CapsuleGeometry(.012,.025,3,8),m.leather,side*.046,-.318,.022).rotation.z=side*.48;
     batchRigid(elbow);limbs.push({node:arm,elbow,side,leg:false});
-    const leg=new THREE.Group();leg.position.set(side*.13,.80,0);root.add(leg);
-    const trouserProfile=[[.064,-.70],[.068,-.62],[.070,-.45],[.076,-.33],[.083,-.12],[.079,0]].map(p=>new THREE.Vector2(...p));
-    mesh(leg,new THREE.LatheGeometry(trouserProfile,20),m.lapel,0,0,-.004,[1,1,.92]);
-    mesh(leg,curveTube([[0,-.055,.067],[0,-.35,.068],[0,-.65,.050]],.0025,10),m.coat);
-    mesh(leg,new THREE.SphereGeometry(.115,20,12),m.leather,0,-.715,.057,[.77,.52,1.43]);
-    mesh(leg,new THREE.BoxGeometry(.143,.023,.243),m.black,0,-.764,.05);
-    batchRigid(leg);limbs.push({node:leg,side,leg:true});
+    const leg=new THREE.Group();leg.name=`attendant-hip-${side}`;leg.position.set(side*.13,.80,0);root.add(leg);
+    const upperProfile=[[.073,-.401],[.077,-.34],[.083,-.12],[.079,0]].map(p=>new THREE.Vector2(...p));
+    mesh(leg,new THREE.LatheGeometry(upperProfile,16),m.lapel,0,0,-.004,[1,1,.92]);
+    mesh(leg,curveTube([[0,-.055,.067],[0,-.23,.071],[0,-.37,.067]],.0025,8),m.lapel);batchRigid(leg);
+    const knee=new THREE.Group();knee.name=`attendant-knee-${side}`;knee.position.y=-.38;leg.add(knee);
+    mesh(knee,new THREE.SphereGeometry(.074,12,8),m.lapel,0,0,-.004,[1,1,.92]);
+    const lowerProfile=[[.064,-.34],[.068,-.27],[.072,-.08],[.074,.023]].map(p=>new THREE.Vector2(...p));
+    mesh(knee,new THREE.LatheGeometry(lowerProfile,16),m.lapel,0,0,-.004,[1,1,.92]);
+    mesh(knee,curveTube([[0,.005,.068],[0,-.15,.062],[0,-.32,.050]],.0025,8),m.lapel);batchRigid(knee);
+    const ankle=new THREE.Group();ankle.name=`attendant-ankle-${side}`;ankle.position.y=-.38;knee.add(ankle);
+    mesh(ankle,new THREE.SphereGeometry(.115,20,12),m.leather,0,.007,.057,[.77,.52,1.43]);
+    mesh(ankle,new THREE.BoxGeometry(.143,.023,.243),m.black,0,-.0415,.05);
+    batchRigid(ankle);limbs.push({node:leg,knee,ankle,side,leg:true});
   }
   const shadow=mesh(root,new THREE.PlaneGeometry(.85,.65),contactShade(),0,.015,0);shadow.rotation.x=-Math.PI/2;
-  return {root,body,limbs};
+  return {root,body,head,limbs};
+}
+
+// Independent joints share the exact enemy surfaces and geometry with the game.
+export function cloneAttendant(model){
+  const root=model.root.clone(true),copy=node=>node?root.getObjectByName(node.name):undefined;
+  return{root,body:copy(model.body),head:copy(model.head),limbs:model.limbs.map(l=>({...l,node:copy(l.node),elbow:copy(l.elbow),knee:copy(l.knee),ankle:copy(l.ankle)}))};
 }

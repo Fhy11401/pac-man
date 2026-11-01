@@ -14,6 +14,7 @@
 - AI 制作材质：用于墙纸、地毯、木材和装饰画，见 [制作说明](assets/materials/GENERATION.md)。
 - 游戏画面参考及衍生贴图：见 [参考材质说明](assets/materials/reference/README.md)。原画面与衍生资产不标注为 CC0，也不宣称为本项目原创。
 - 音乐：Chris Pinkston 的 Monkey Business 与 Feeding Frenzy，见 [音乐署名](assets/music/README.md)。曲目及录音版权归各自权利方。
+- 心跳：InspectorJ 的 Heartbeat, Regular, Single, 01-01, LOOP，CC BY 4.0；使用官方高质量预览并做运行时节奏处理，见 [心跳音效说明](assets/audio/heartbeat/README.md)。
 - 主管通话：英文 AI 配音使用 HeyGen 公共音色 Intense Isaac - Serious，配合本项目中文字幕，见 [语音说明](assets/audio/tutorial/README.md)。未提取原游戏配音，不冒称真人录音；不将合成音频标注为 CC0 或开放授权。
 - Three.js：随附运行库遵循其原有许可证与文件署名。
 

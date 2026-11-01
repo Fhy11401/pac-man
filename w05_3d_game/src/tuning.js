@@ -37,7 +37,7 @@ export const TUNING_GROUPS = [
     {key:'escapeEnemySpeed',label:'撤离追逐速度',value:2.4,min:1,max:3.8,step:.05,unit:'格/秒'},
   ]},
   {title:'地图显示',id:'developer-map-options',fields:[
-    {key:'localMapScale',label:'局部地图放大',value:2.1,min:1.4,max:3,step:.1,unit:'×'},
+    {key:'localMapScale',label:'局部地图放大',value:1.5,min:1.4,max:3,step:.1,unit:'×'},
   ]},
 ];
 export const TUNING_FIELDS=TUNING_GROUPS.flatMap(group=>group.fields);

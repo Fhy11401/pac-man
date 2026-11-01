@@ -23,7 +23,7 @@ test('Incremental turn allows concurrent mouse rotation without snapping or over
 });
 test('Map defaults to enlarged local view and keeps player centered at all positions',()=>{
  for(const player of [{x:1,z:1},{x:7,z:7},{x:13,z:13}])for(const yaw of [0,Math.PI/3,Math.PI]){
-  const transform=mapTransform(450,player,yaw);assert.equal(transform.scale,2.1);
+  const transform=mapTransform(450,player,yaw);assert.equal(transform.scale,1.5);
   assert.deepEqual(mapPoint(player,transform),{x:225,y:225});
  }
 });

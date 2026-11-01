@@ -82,5 +82,7 @@ test('WorldView isolates friendly and developer effects to the intended camera a
   v.security.active=true;frame();assert.deepEqual(draws,['monitor']);
   game.phase='caught';game.caught=1.1;frame();assert.equal(v.security.active,false);assert.deepEqual(draws,[{mosaic:true}]);assert.equal(v.warningLight.intensity,0);
   v.motionTuning.friendlyMode=false;frame();assert.deepEqual(draws,[{mosaic:false}]);game.phase='playing';frame(false);assert.deepEqual(draws,[{mosaic:false}]);assert.equal(v.warningLight.intensity,0);
+  v.openingScene={update:()=>true,lensThreat:1};v.motionTuning.friendlyMode=true;frame();assert.deepEqual(draws,[{mosaic:false}],'opening close-up remains clear in friendly mode');
+  v.openingScene.lensThreat=0;frame();assert.deepEqual(draws,[{mosaic:false}]);v.openingScene.lensThreat=1;v.motionTuning.friendlyMode=false;frame();assert.deepEqual(draws,[{mosaic:false}]);delete v.openingScene;
   v.container={};r.domElement={parentNode:v.container};v.menuView={draw(){draws.push('menu');return true;}};draws.length=0;WorldView.prototype.renderTitle.call(v,'lost');assert.deepEqual(draws,['menu']);
 });

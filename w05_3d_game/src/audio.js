@@ -1,3 +1,4 @@
+import {loadHeartbeatData,playHeartbeatSample,heartbeatGap} from './heartbeat-sample.js';
 import {OpeningAudio} from './opening-audio.js';
 import {MusicDirector,prepareScore} from './music.js';
 import {BLACKOUT_LAYOUT} from './blackout-layout.js';
@@ -14,9 +15,10 @@ export function proximityMix(distance,occluded=false){
   return {heartGain:gain,heartInterval:60/(62+116*presence),footGain:gain,voiceGain:.29*near*(occluded?.72:1)};
 }
 export class Sound {
-  constructor(){this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voiceClock=2;this.voices=new Set();this.score=prepareScore();this.musicVolume=.325;}
+  constructor(){this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voiceClock=2;this.voices=new Set();this.score=prepareScore();this.heartbeatBytes=loadHeartbeatData();this.musicVolume=.325;}
   unlock(){try{if(!this.ctx){
     this.ctx=new(window.AudioContext||window.webkitAudioContext)();
+    this.heartbeatReady=this.heartbeatBytes.then(bytes=>bytes?this.ctx.decodeAudioData(bytes):null).then(clip=>this.heartbeatClip=clip).catch(()=>null);
     this.master=this.ctx.createGain();this.master.gain.value=this.muted?0:.8;
     const limiter=this.ctx.createDynamicsCompressor();limiter.threshold.value=-15;limiter.knee.value=14;limiter.ratio.value=5;limiter.attack.value=.003;limiter.release.value=.18;
     this.master.connect(limiter).connect(this.ctx.destination);this.output=limiter;
@@ -54,10 +56,12 @@ export class Sound {
     this.tone(enemy?108:140,enemy?.17:.09,'sine',volume*.7,0,pan,bus,enemy?44:85);
     if(enemy)this.noiseBurst(volume*.65,pan,.055,2300,this.threat,.025,900);
   }
-  heartbeat(volume){
+  heartbeat(volume,interval=.65){
+    if(this.ready())this.heartBeat={at:this.ctx.currentTime,gain:volume,interval,gap:heartbeatGap(interval)};
+    if(playHeartbeatSample(this,volume,interval))return;
     // A sustained body and audible upper harmonics retain the pulse on small
     // speakers; distance attenuation remains shared with enemy footsteps.
-    for(const [delay,mult] of [[0,1],[.15,.8]]){
+    for(const [delay,mult] of [[0,1],[heartbeatGap(interval),.8]]){
       this.tone(118,.23,'sine',volume*1.15*mult,delay,0,this.threat,62,true);
       this.tone(220,.14,'triangle',volume*.5*mult,delay,0,this.threat,120,true);
       this.noiseBurst(volume*.3,0,.085,310,this.threat,delay,140);
@@ -101,7 +105,7 @@ export class Sound {
     if(name==='call-connect'){this.tone(620,.09,'sine',.055);this.tone(930,.13,'sine',.045,.10);}
     if(name==='call-end'){this.tone(740,.10,'sine',.045);this.tone(440,.16,'sine',.045,.12);}
     if(name==='call-ring')for(const delay of [0,.2,.45]){this.tone(880,.14,'sine',.08,delay);this.tone(1320,.14,'sine',.035,delay);}
-    if(name==='mains-fail'||name==='backup-start')this.opening?.play(name);
+    if(name==='monitor-watch'||name==='lens-strike'||name==='mains-fail'||name==='backup-start')this.opening?.play(name);
     if(name==='backup-ready'){this.noiseBurst(.25,0,.13,1100,this.effects);this.tone(115,.25,'triangle',.12);this.tone(660,.18,'sine',.07,.2);}
     if(name==='phone-a'||name==='phone-b'){this.tone(697,.09,'sine',.035);this.tone(1209,.09,'sine',.025);}
     if(name==='power-on'){
@@ -157,7 +161,7 @@ export class Sound {
     this.music?.update(dt,d,occluded,escape,chasing);
     const mix=proximityMix(d,occluded);
     if(enemySpeed>.02){this.enemyStride+=enemySpeed*2.4*dt;if(this.enemyStride>=1.65){this.enemyStride%=1.65;if(mix.footGain>.01)this.step(mix.footGain,pan,true);}}
-    this.heartClock=Math.min(this.heartClock,mix.heartInterval)-dt;if(mix.heartGain>.001&&this.heartClock<=0){this.heartbeat(mix.heartGain);this.heartClock=mix.heartInterval;}
+    this.heartClock=Math.min(this.heartClock,mix.heartInterval)-dt;if(mix.heartGain>.001&&this.heartClock<=0){this.heartbeat(mix.heartGain,mix.heartInterval);this.heartClock=mix.heartInterval;}
     this.voiceClock-=dt;if(mix.voiceGain>.025&&enemySpeed>.02&&this.voiceClock<=0){this.growl(mix.voiceGain,pan);this.voiceClock=escape?3.8:4.6+Math.random()*1.6;}
   }
 }
