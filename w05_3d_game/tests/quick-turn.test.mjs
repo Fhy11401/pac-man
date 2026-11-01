@@ -48,6 +48,6 @@ test('Developer map magnification scales the local view without moving its cente
  const p={x:4,z:5};
  for(const scale of [1.4,2.1,3]){
   const local=mapTransform(450,p,1,true,scale);assert.equal(local.scale,scale);assert.deepEqual(mapPoint(p,local),{x:225,y:225});
-  assert.equal(mapTransform(450,p,1,false,scale).scale,.8);
+  assert.deepEqual(mapTransform(450,p,1,false,scale),mapTransform(450,p,1,false,2.1));
  }
 });

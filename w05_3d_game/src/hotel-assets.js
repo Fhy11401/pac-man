@@ -2,11 +2,12 @@ import * as THREE from '../vendor/three.module.js';
 
 const fabric={normalMap:'pbr/Fabric030_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/Fabric030_1K-JPG_Roughness.jpg'};
 const files={
-  paper:{map:'reference/damask-reference-v281.png',...fabric,normalScale:.10,detailMultiplier:10},
-  referenceWood:{map:'reference/wood-reference-v281.png',normalMap:'pbr/Wood051_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/Wood051_1K-JPG_Roughness.jpg',normalScale:.12,detailRotation:Math.PI/2},
-  referencePlaster:{map:'reference/plaster-reference-v281.png',normalMap:'pbr/PaintedPlaster017_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/PaintedPlaster017_1K-JPG_Roughness.jpg',normalScale:.15},
+  paper:{map:'damask-v290.png',...fabric,normalScale:.10,detailMultiplier:10},
+  referenceWood:{map:'pbr/Wood051_1K-JPG_Color.jpg',normalMap:'pbr/Wood051_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/Wood051_1K-JPG_Roughness.jpg',normalScale:.18,rotation:Math.PI/2},
+  referencePlaster:{map:'pbr/PaintedPlaster017_1K-JPG_Color.jpg',normalMap:'pbr/PaintedPlaster017_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/PaintedPlaster017_1K-JPG_Roughness.jpg',normalScale:.15},
   wood:{map:'pbr/Wood051_1K-JPG_Color.jpg',normalMap:'pbr/Wood051_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/Wood051_1K-JPG_Roughness.jpg',normalScale:.28,rotation:Math.PI/2},
   plaster:{map:'pbr/PaintedPlaster017_1K-JPG_Color.jpg',normalMap:'pbr/PaintedPlaster017_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/PaintedPlaster017_1K-JPG_Roughness.jpg',normalScale:.20},
+  leather:{normalMap:'pbr/Leather037_1K-JPG_NormalGL.jpg',roughnessMap:'pbr/Leather037_1K-JPG_Roughness.jpg',normalScale:.32},
   fabric:{...fabric,normalScale:.24},
   carpet:{map:'carpet-v280.png',...fabric,normalScale:.25,detailMultiplier:10},
   art:{map:'paintings-v270.png'},

@@ -24,7 +24,7 @@ test('Shared source images decode once while each material retains independent U
 test('Paper print and micro-weave use independent scales and never turn color into normals',async()=>{
  const paper=new THREE.MeshStandardMaterial(),cloth=new THREE.MeshStandardMaterial();
  await Promise.all([applyHotelAsset(paper,'paper',{repeat:[1.65,1.35],bump:.1}),applyHotelAsset(cloth,'fabric')]);
- assert.equal(paper.map.name,'reference/damask-reference-v281.png');assert.equal(paper.normalMap.name,'pbr/Fabric030_1K-JPG_NormalGL.jpg');
+ assert.equal(paper.map.name,'damask-v290.png');assert.equal(paper.normalMap.name,'pbr/Fabric030_1K-JPG_NormalGL.jpg');
  assert.notEqual(paper.map.source,paper.normalMap.source);assert.equal(paper.normalMap.source,cloth.normalMap.source);assert.equal(paper.roughnessMap.source,cloth.roughnessMap.source);
  assert.deepEqual(paper.normalMap.repeat.toArray(),[16.5,13.5]);assert.equal(paper.bumpMap,null);assert.equal(cloth.map,null);
 });
@@ -37,8 +37,8 @@ test('Late image resolution cannot attach textures to a disposed scene material'
 test('Reference wood keeps supplemental normal grain aligned when rotating structural members',async()=>{
  const upright=new THREE.MeshStandardMaterial(),crossbar=new THREE.MeshStandardMaterial();
  await Promise.all([applyHotelAsset(upright,'referenceWood'),applyHotelAsset(crossbar,'referenceWood',{rotation:Math.PI/2})]);
- assert.equal(upright.map.rotation,0);assert.equal(upright.normalMap.rotation,Math.PI/2);
- assert.equal(crossbar.map.rotation,Math.PI/2);assert.equal(crossbar.normalMap.rotation,Math.PI);
+ assert.equal(upright.map.rotation,Math.PI/2);assert.equal(upright.normalMap.rotation,Math.PI/2);
+ assert.equal(crossbar.map.rotation,Math.PI/2);assert.equal(crossbar.normalMap.rotation,Math.PI/2);
  assert.equal(crossbar.normalMap.source,upright.normalMap.source);assert.equal(crossbar.map.source,upright.map.source);
 });
 

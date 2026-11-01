@@ -1,18 +1,21 @@
+import {mazeGame} from './helpers/game-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {slideMove,movementVelocity} from '../src/movement.js';
 import {createGame,tick,blocked} from '../src/core.js';
 import {RULES,wallInset,distance} from '../src/world.js';
-const fixture=()=>{const g=createGame();g.player={x:2,z:1};g.enemy={x:-100,z:-100};g.enemyDelay=999;return g;};
+import {straightCorridor,rightAngle,projection} from './helpers/map-fixtures.js';
+const hall=straightCorridor();
+const fixture=()=>{const g=mazeGame();g.player=hall.at(0);g.enemy={x:-100,z:-100};g.enemyDelay=999;return g;};
 
 test('Continuous contact reaches the wall and retains all tangential movement',()=>{
- const limit=1.5-wallInset()-RULES.playerRadius;
- const result=slideMove({x:2,z:1},{x:.2,z:.3},RULES.playerRadius,RULES.corridorWidth);
- assert.ok(Math.abs(result.position.x-2.2)<1e-8);
+ const limit=hall.origin.z+.5-wallInset()-RULES.playerRadius;
+ const result=slideMove(hall.at(0),{x:.2,z:.3},RULES.playerRadius,RULES.corridorWidth);
+ assert.ok(Math.abs(result.position.x-hall.origin.x-.2)<1e-8);
  assert.ok(Math.abs(result.position.z-limit)<2e-6);assert.equal(blocked(result.position),false);
  assert.ok(result.path.length>=3);
- const exact=slideMove({x:2,z:limit-1e-10},{x:.1,z:.2},RULES.playerRadius,RULES.corridorWidth);
- assert.equal(blocked(exact.position),false);assert.ok(exact.position.z<=limit);assert.ok(Math.abs(exact.position.x-2.1)<1e-8);
+ const exact=slideMove({x:hall.origin.x,z:limit-1e-10},{x:.1,z:.2},RULES.playerRadius,RULES.corridorWidth);
+ assert.equal(blocked(exact.position),false);assert.ok(exact.position.z<=limit);assert.ok(Math.abs(exact.position.x-hall.origin.x-.1)<1e-8);
 });
 
 test('Holding against a side wall stays still without repeatedly bouncing or storing push velocity',()=>{
@@ -25,9 +28,11 @@ test('Holding against a side wall stays still without repeatedly bouncing or sto
 });
 
 test('Corner sliding has no preference for the X or Z axis',()=>{
- const a=slideMove({x:1.05,z:1.15},{x:.4,z:.2},RULES.playerRadius,RULES.corridorWidth);
- const b=slideMove({x:1.15,z:1.05},{x:.2,z:.4},RULES.playerRadius,RULES.corridorWidth);
- assert.ok(Math.abs(a.position.x-b.position.z)<1e-8);assert.ok(Math.abs(a.position.z-b.position.x)<1e-8);
+ const turn=rightAngle();
+ const a=slideMove(turn.at(-.05,.15),turn.vector(-.4,.2),RULES.playerRadius,RULES.corridorWidth);
+ const b=slideMove(turn.at(-.15,.05),turn.vector(-.2,.4),RULES.playerRadius,RULES.corridorWidth);
+ assert.ok(Math.abs(-projection(a.position,turn.corner,turn.incoming)-projection(b.position,turn.corner,turn.outgoing))<1e-8);
+ assert.ok(Math.abs(projection(a.position,turn.corner,turn.outgoing)+projection(b.position,turn.corner,turn.incoming))<1e-8);
  assert.equal(blocked(a.position),false);assert.equal(blocked(b.position),false);
 });
 

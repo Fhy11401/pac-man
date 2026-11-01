@@ -1,7 +1,11 @@
 import * as THREE from '../vendor/three.module.js';
-import {MAP,isOpen} from './world.js';
+import {MAP,SAFE_ROOM,isInSafeRoom,isOpen,edgeIsOpen} from './world.js';
+import {regionFor,buildLandmarkPlan} from './map-landmarks.js';
 import {contactShade} from './hotel-materials.js';
 import {applyHotelAsset} from './hotel-assets.js';
+import {timberBox,paneledDoor,serviceCabinet,ceilingBowl} from './hotel-joinery.js';
+
+export const createHotelDoor=(v,parent,number,options)=>paneledDoor(v,parent,number,options);
 
 function painting(index,assetJobs){
   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=384;
@@ -53,71 +57,50 @@ function archGeometry(width,height){
   return new THREE.ExtrudeGeometry(s,{depth:.085,bevelEnabled:false,curveSegments:8});
 }
 
-function squareDiffuserGeometry(){
-  const positions=[],colours=[],indices=[],upper=.18,lower=.15,drop=.095;
-  const top=new THREE.Color('#e6dcc0'),bottom=new THREE.Color('#fff4d9');
-  const face=points=>{const start=positions.length/3;for(const point of points){positions.push(...point);const colour=point[1]<-.05?bottom:top;colours.push(colour.r,colour.g,colour.b);}indices.push(start,start+1,start+2,start,start+2,start+3);};
-  // Sloping glass sides catch light differently from the inset lower diffuser.
-  face([[-lower,-drop,-lower],[lower,-drop,-lower],[lower,-drop,lower],[-lower,-drop,lower]]);
-  face([[-upper,0,upper],[-lower,-drop,lower],[lower,-drop,lower],[upper,0,upper]]);
-  face([[upper,0,-upper],[lower,-drop,-lower],[-lower,-drop,-lower],[-upper,0,-upper]]);
-  face([[upper,0,upper],[lower,-drop,lower],[lower,-drop,-lower],[upper,0,-upper]]);
-  face([[-upper,0,-upper],[-lower,-drop,-lower],[-lower,-drop,lower],[-upper,0,upper]]);
-  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colours,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
-}
-
-const cornerAt=(x,z)=>isOpen(x,z)&&(isOpen(x-1,z)||isOpen(x+1,z))&&(isOpen(x,z-1)||isOpen(x,z+1));
+const linked=(x,z,dx,dz)=>edgeIsOpen({x,z},{x:x+dx,z:z+dz});
+const cornerAt=(x,z)=>isOpen(x,z)&&(linked(x,z,-1,0)||linked(x,z,1,0))&&(linked(x,z,0,-1)||linked(x,z,0,1));
 
 // Every ornament sits against a wall or above eye level; the playable maze stays unchanged.
 export function decorateHotel(v,world,unit){
   const ivory=v.mat.trim,height=v.ceilingHeight;
-  const art=[0,1,2].map(i=>painting(i,v.assetJobs)),signs=[plaque('西翼 · 客房','WEST WING  /  GUEST ROOMS'),plaque('东翼 · 画廊','EAST WING  /  GALLERY')];
-  const shade=contactShade();let luggageCount=0,paintingCount=0;
-  const bounce=ceilingBounce(),arch=archGeometry(v.corridorWidth,height);v.detailAudit.arches=0;v.detailAudit.squareLamps=0;v.detailAudit.raisedWallPanels=0;
-  const glassGeometry=squareDiffuserGeometry(),glassMaterial=new THREE.MeshBasicMaterial({color:new THREE.Color(4,4,4),vertexColors:true,toneMapped:false});
+  const woodBox=(w,h,d,x,y,z,parent)=>timberBox(v,w,h,d,x,y,z,parent,w>h?'x':'y');
+  const art=[0,1,2].map(i=>painting(i,v.assetJobs)),signs=[plaque('西翼 · 客房','WEST WING  /  GUEST ROOMS'),plaque('中央 · 大厅','CENTRAL HALL'),plaque('东翼 · 画廊','EAST WING  /  GALLERY')];
+  const shade=contactShade();let luggageCount=0,paintingCount=0,cabinetCount=0;
+  const bounce=ceilingBounce(),arch=archGeometry(v.corridorWidth,height);v.detailAudit.arches=0;v.detailAudit.squareLamps=0;v.detailAudit.roundLamps=0;v.detailAudit.raisedWallPanels=0;
   const mouldingGeometry=new THREE.CylinderGeometry(.007,.007,unit,6,1),pictureBead=new THREE.CylinderGeometry(.005,.005,1,6,1),frameStud=new THREE.SphereGeometry(.0075,8,4);
-  const transitions=new Set(['9,1','7,5','5,13']);
+  const signSites=buildLandmarkPlan(),signCounts=[0,0,0],archRegions=new Set();let roomLampPlaced=false;
   MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
     if(tile==='#')return;
-    const center=world(x,z),reference=z===1&&x>=1&&x<=5;
-    const horizontal=isOpen(x-1,z)||isOpen(x+1,z),vertical=isOpen(x,z-1)||isOpen(x,z+1),isCorner=horizontal&&vertical;
+    const center=world(x,z),region=regionFor(x),roomCell=x>=SAFE_ROOM.minX&&x<=SAFE_ROOM.maxX&&z>=SAFE_ROOM.minZ&&z<=SAFE_ROOM.maxZ;
+    const horizontal=linked(x,z,-1,0)||linked(x,z,1,0),vertical=linked(x,z,0,-1)||linked(x,z,0,1),isCorner=horizontal&&vertical;
     // Cornices belong to the walls. Crossbars at every floor cell exposed the
     // grid and made the ceiling look like a low-poly cage.
-    if(!reference&&!isCorner&&transitions.has(`${x},${z}`)){
+    if(!isInSafeRoom({x,z})&&!isCorner&&!archRegions.has(region)&&Math.abs(z-MAP.length/2)<2&&((horizontal&&linked(x,z,-1,0)&&linked(x,z,1,0))||(vertical&&linked(x,z,0,-1)&&linked(x,z,0,1)))){
+      archRegions.add(region);
       const portal=v.mesh(arch,ivory);portal.position.copy(center);if(horizontal)portal.rotation.y=Math.PI/2;portal.castShadow=true;v.detailAudit.arches++;
     }
-    const nextToCorner=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz])=>cornerAt(x+dx,z+dz));
+    const nextToCorner=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz])=>linked(x,z,dx,dz)&&cornerAt(x+dx,z+dz));
     // Corners always have a lamp. Straight runs add a spaced rhythm without clusters.
-    if(isCorner||((x+z)%2===0&&!nextToCorner)){
-      if(!reference){
-      const lamp=new THREE.Group();lamp.position.set(center.x,height-.047,center.z);v.scene.add(lamp);
-      v.box(.40,.025,.40,v.mat.brass,0,.022,0,lamp);
-      v.mesh(glassGeometry,glassMaterial,lamp);
-      for(const side of [-1,1]){
-        // Two brass rims plus four sloped corner mullions give the lamp real depth.
-        v.box(.378,.011,.011,v.mat.brass,0,0,side*.184,lamp);v.box(.011,.011,.378,v.mat.brass,side*.184,0,0,lamp);
-        v.box(.318,.010,.010,v.mat.brass,0,-.096,side*.154,lamp);v.box(.010,.010,.318,v.mat.brass,side*.154,-.096,0,lamp);
-        for(const other of [-1,1]){
-          const top=new THREE.Vector3(side*.184,0,other*.184),bottom=new THREE.Vector3(side*.154,-.096,other*.154),delta=bottom.clone().sub(top);
-          const post=v.box(.010,delta.length(),.010,v.mat.brass,0,0,0,lamp);post.position.copy(top.add(bottom).multiplyScalar(.5));post.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());
-        }
-      }
-      v.box(.308,.008,.008,v.mat.brass,0,-.099,0,lamp);v.box(.008,.008,.308,v.mat.brass,0,-.099,0,lamp);
-      v.detailAudit.squareLamps++;
-      }
-      const wash=v.mesh(new THREE.PlaneGeometry(reference?2.8:1.8,reference?2.8:1.8),bounce);wash.rotation.x=Math.PI/2;wash.position.set(center.x,height-.006,center.z);
-      const lightPosition=new THREE.Vector3(center.x,height-.21,center.z);lightPosition.isCorner=isCorner;const age=(x*7+z*11)%3;lightPosition.strength=isCorner?[16.2,17.4,16.8][age]:15.8;lightPosition.reach=5.5;lightPosition.angle=1.12;lightPosition.warmth=age===0?0xf3e8ce:0xffe4b5;v.lampPositions.push(lightPosition);
+    if(roomCell?!roomLampPlaced:isCorner||((x+z)%2===0&&!nextToCorner)){
+      const lampCenter=roomCell?world((SAFE_ROOM.minX+SAFE_ROOM.maxX)/2,(SAFE_ROOM.minZ+SAFE_ROOM.maxZ)/2):center;
+      if(roomCell)roomLampPlaced=true;
+      const lamp=new THREE.Group();lamp.position.set(lampCenter.x,height-.047,lampCenter.z);v.scene.add(lamp);
+      ceilingBowl(v,lamp,roomCell?.26:.218);
+      v.detailAudit.roundLamps++;
+      const wash=v.mesh(new THREE.PlaneGeometry(roomCell?2.9:1.8,roomCell?2.9:1.8),bounce);wash.rotation.x=Math.PI/2;wash.position.set(lampCenter.x,height-.006,lampCenter.z);
+      const lightPosition=new THREE.Vector3(lampCenter.x,height-.21,lampCenter.z);lightPosition.isCorner=roomCell||isCorner;const age=(x*7+z*11)%3;lightPosition.strength=roomCell?22.4:isCorner?[16.2,17.4,16.8][age]:15.8;lightPosition.reach=roomCell?6:5.5;lightPosition.angle=roomCell?1.16:1.12;lightPosition.warmth=roomCell?0xffe0ad:age===0?0xf3e8ce:0xffe4b5;v.lampPositions.push(lightPosition);
     }
-    if(reference)return;
     for(const d of [{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2},{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0}]){
-      if(isOpen(x+d.x,z+d.z))continue;
+      const next={x:x+d.x,z:z+d.z};
+      if(edgeIsOpen({x,z},next)||isOpen(next.x,next.z))continue;
       const hash=x*17+z*13+(d.x+1)*3+d.z,g=new THREE.Group();g.position.copy(world(x+d.x*(.482-v.wallInset),z+d.z*(.482-v.wallInset)));g.rotation.y=d.a;v.scene.add(g);
       // Continuous plaster/stone wainscot is supplied by mat.panel in the wall shell.
       // Restrained shadow grooves and rounded beads replace repeated raised rectangles.
-      v.box(unit,.010,.018,v.mat.wood,0,.936,-.022,g);
-      v.box(unit,.018,.035,v.mat.wood,0,.128,-.015,g);
-      v.box(unit,.009,.024,v.mat.wood,0,height-.173,-.018,g);
+      woodBox(unit,.010,.018,0,.936,-.022,g);
+      woodBox(unit,.018,.035,0,.128,-.015,g);
+      woodBox(unit,.009,.024,0,height-.173,-.018,g);
       for(const y of [height-.115,height-.181]){const bead=v.mesh(mouldingGeometry,ivory,g);bead.rotation.z=Math.PI/2;bead.position.set(0,y,-.012);}
+      if(isInSafeRoom({x,z}))continue;
       if(hash%7!==0&&hash%4!==0){
         if(hash%3===0){
           const frame=new THREE.Group();frame.position.set(0,1.82,0);g.add(frame);
@@ -126,10 +109,10 @@ export function decorateHotel(v,world,unit){
           const shadow=v.mesh(new THREE.PlaneGeometry(.96,1.22),shade,frame);shadow.position.set(.018,-.018,.008);
           v.box(.83,1.10,.035,v.mat.black,0,0,.025,frame);
           for(const side of [-1,1]){
-            v.box(.027,1.10,.035,v.mat.wood,side*.423,0,.040,frame);
-            v.box(.87,.027,.035,v.mat.wood,0,side*.55,.040,frame);
+            woodBox(.027,1.10,.035,side*.423,0,.040,frame);
+            woodBox(.819,.027,.035,0,side*.5365,.040,frame);
             const edge=v.box(.026,1.065,.027,v.mat.brass,side*.400,0,.062,frame);edge.castShadow=true;
-            const rail=v.box(.825,.026,.027,v.mat.brass,0,side*.530,.062,frame);rail.castShadow=true;
+            const rail=v.box(.774,.026,.027,v.mat.brass,0,side*.5195,.062,frame);rail.castShadow=true;
             v.box(.012,1.015,.012,v.mat.black,side*.379,0,.072,frame);v.box(.752,.012,.012,v.mat.black,0,side*.502,.072,frame);
             const vertical=v.mesh(pictureBead,v.mat.brass,frame);vertical.position.set(side*.385,0,.080);vertical.scale.y=1.035;
             const horizontal=v.mesh(pictureBead,v.mat.brass,frame);horizontal.rotation.z=Math.PI/2;horizontal.scale.y=.779;horizontal.position.set(0,side*.514,.080);
@@ -137,20 +120,26 @@ export function decorateHotel(v,world,unit){
           }
           const picture=v.mesh(new THREE.PlaneGeometry(.73,.96),art[variant],frame);picture.position.set(0,0,.074);
 
-        }else if(hash%5===0){
-          const sign=v.mesh(new THREE.PlaneGeometry(.88,.275),signs[x<7?0:1],g);sign.position.set(0,2.09,.055);
+        }else if(hash%5===0&&signCounts[region]<3&&signSites.every(p=>Math.abs(p.x-x)+Math.abs(p.z-z)>=6)){
+          const sign=v.mesh(new THREE.PlaneGeometry(.88,.275),signs[region],g);sign.position.set(0,2.09,.055);signSites.push({x,z});signCounts[region]++;
         }
       }
+      if(!isCorner&&hash%7!==0&&hash%4!==0&&hash%3!==0&&hash%5!==0&&hash%11===0&&cabinetCount<2){serviceCabinet(v,g);cabinetCount++;}
       // Carpet edge follows the actual walls, including corners, rather than a square tile grid.
-      v.box(unit,.006,.018,v.mat.wood,0,.012,.10,g);
+      woodBox(unit,.006,.018,0,.012,.10,g);
       // Only two forgotten cases, tucked entirely within the wall collision margin.
       if(isCorner&&hash%13===0&&luggageCount<2&&x>2){
         const leather=new THREE.MeshStandardMaterial({color:luggageCount?0x403a32:0x4e302c,roughness:.94});
         const bag=v.box(.42,.52,.14,leather,.45,.28,.10,g);bag.castShadow=true;
-        for(const sx of [.32,.58])v.box(.022,.51,.008,v.mat.wood,sx,.28,.174,g);
+        for(const sx of [.32,.58])woodBox(.022,.51,.008,sx,.28,.174,g);
         v.box(.13,.022,.035,v.mat.black,.45,.56,.10,g);
+        v.box(.408,.006,.002,v.mat.black,.45,.442,.171,g);
+        for(const sx of [.30,.60]){
+          v.box(.028,.033,.005,v.mat.brass,sx,.443,.1755,g);
+          for(const y of [.037,.519])v.box(.039,.026,.008,v.mat.brass,sx,y,.174,g);
+        }
         const footShadow=v.mesh(new THREE.PlaneGeometry(.56,.25),shade,g);footShadow.rotation.x=-Math.PI/2;footShadow.position.set(.45,.014,.10);
-        luggageCount++;v.detailAudit.luggage++;v.detailAudit.maxPropProjection=(.5-.482)*unit+.10+.07;
+        luggageCount++;v.detailAudit.luggage++;v.detailAudit.maxPropProjection=(.5-.482)*unit+.178;
       }
     }
   }));

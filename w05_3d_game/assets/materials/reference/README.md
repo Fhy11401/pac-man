@@ -1,8 +1,8 @@
 # 参考材质
 
-用于旅馆入口走廊的墙面与木作视觉。
+保留的历史参考素材。当前场景使用独立底色与配套表面贴图，不再将整张游戏截图采样为墙面。
 
-- `source-reference.png`：游戏画面参考图，原图像素未修改；局部墙面通过透视映射采样。
+- `source-reference.png`：游戏画面参考图，原图像素未修改；供历史素材溯源。
 - `damask-reference-v281.png`：参考衍生的织物墙纸贴图。
 - `wood-reference-v281.png`：参考衍生的深色木材贴图。
 - `plaster-reference-v281.png`：参考衍生的灰泥贴图。

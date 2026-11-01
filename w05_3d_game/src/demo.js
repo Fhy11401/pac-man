@@ -1,9 +1,12 @@
 import {MOUSE_RADIANS_PER_PIXEL} from './look-input.js';
-import { SHARDS, EXIT, distance, cell, routesFrom } from './world.js';
+import {slideMove} from './movement.js';
+import { SHARDS, EXIT, START_YAW, ENTRY_GATE, distance, cell, routesFrom } from './world.js';
 const wrap = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const shardAt = new Map(SHARDS.map((p, i) => [`${p.x},${p.z}`, i]));
+const initialTravel=()=>({x:Math.round(-Math.sin(START_YAW)),z:Math.round(-Math.cos(START_YAW))});
 export const DEMO_CAMERA = Object.freeze({ maxTurnSpeed: 5.5, response: 8, lookAhead: .65 });
+export const DEMO_TIME_LIMIT = Math.max(180, SHARDS.length * 2.5);
 
 // A critically damped mouse stroke: velocity rises and settles without a hard turn stop.
 export class MouseStroke {
@@ -32,7 +35,7 @@ export function roundCorners(start,route){
 }
 // Plans a few corners ahead, but only supplies normal movement and camera input.
 export class DemoController {
-  constructor() { this.route = []; this.deaths = -1; this.target = null; this.yaw = -Math.PI / 2; this.turnSpeed = 0; this.mouseStroke=new MouseStroke(); this.evadeCooldown=0; this.travel = {x:1,z:0}; }
+  constructor() { this.route = []; this.deaths = -1; this.target = null; this.yaw = START_YAW; this.turnSpeed = 0; this.mouseStroke=new MouseStroke(); this.evadeCooldown=0; this.travel = initialTravel(); }
   plan(game) {
     const cost = p => 1 + Math.max(0, 4 - distance(p, game.enemy)) * 5;
     const planned = new Set(game.collected); let from = cell(game.player), heading = this.travel;
@@ -82,11 +85,29 @@ export class DemoController {
     this.yaw-=mouseX*MOUSE_RADIANS_PER_PIXEL;this.turnSpeed=this.mouseStroke.velocity;
   }
   input(game, dt) {
-    if(game.deaths!==this.deaths){this.route=[];this.deaths=game.deaths;this.yaw=-Math.PI/2;this.turnSpeed=0;this.mouseStroke=new MouseStroke();this.evadeCooldown=0;this.travel={x:1,z:0};}
+    if(game.deaths!==this.deaths){this.route=[];this.deaths=game.deaths;this.yaw=START_YAW;this.turnSpeed=0;this.mouseStroke=new MouseStroke();this.evadeCooldown=0;this.travel=initialTravel();}
     if(game.phase!=='playing')return {x:0,z:0};
+    if(!game.entryOpened){
+      this.route=[ENTRY_GATE.inside,ENTRY_GATE.outside];this.aim(game,dt);
+      const d=distance(game.player,ENTRY_GATE.inside),scale=Math.min(1,d/(game.tuning.playerSpeed*dt));
+      return {x:(ENTRY_GATE.inside.x-game.player.x)/Math.max(d,.00001)*scale,z:(ENTRY_GATE.inside.z-game.player.z)/Math.max(d,.00001)*scale,run:false,interact:d<.12};
+    }
     // Advance before inertia carries us beyond a waypoint and makes the controller turn back.
     const waypointReach=Math.max(.035,Math.hypot(game.motionVelocity.x,game.motionVelocity.z)*(dt*.5+game.tuning.movementInertia*.5));
-    while(this.route.length&&distance(game.player,this.route[0])<waypointReach)this.route.shift();
+    const passedReach=Math.max(.2,game.tuning.sprintSpeed*(dt+game.tuning.movementInertia));
+    while(this.route.length){
+      const first=this.route[0],gap=distance(game.player,first);
+      if(gap<waypointReach){this.route.shift();continue;}
+      if(this.route.length<2||gap>passedReach)break;
+      const next=this.route[1],passed=(game.player.x-first.x)*(next.x-first.x)+(game.player.z-first.z)*(next.z-first.z)>0;
+      if(!passed)break;
+      // A brief stop can shrink waypointReach after inertia has carried us past
+      // a point. Do not demand a backward step while the camera aims forward.
+      // Only consume it when the real body collider can reach the next point.
+      const sweep=slideMove(game.player,{x:next.x-game.player.x,z:next.z-game.player.z},game.tuning.playerRadius,game.tuning.corridorWidth);
+      if(distance(sweep.position,next)>1e-5)break;
+      this.route.shift();
+    }
     if(!this.route.length)this.plan(game);
     if(!this.route.length)return {x:0,z:0};
     this.evadeCooldown=Math.max(0,this.evadeCooldown-dt);

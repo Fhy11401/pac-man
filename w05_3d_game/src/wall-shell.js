@@ -3,14 +3,17 @@ import * as THREE from '../vendor/three.module.js';
 // Exact exterior of the union of the former expanded wall AABBs. Adjacent boxes
 // overlap along their corridor faces; drawing both faces causes texture/depth
 // fighting. Coordinate compression removes those duplicate and internal faces.
-export function createWallShell(walls,unit,wallInset,height,y,pad=0){
+export function createWallShell(walls,unit,wallInset,height,y,pad=0,center={x:7,z:7},transitions=[]){
   if(!Array.isArray(walls)||walls.some(p=>!Number.isFinite(p?.x)||!Number.isFinite(p?.z)))throw new TypeError('walls must contain finite x/z coordinates');
   if(!Number.isFinite(unit)||unit<=0||!Number.isFinite(height)||height<=0||![wallInset,y,pad].every(Number.isFinite))throw new RangeError('Invalid wall dimensions');
   const size=unit+2*wallInset*unit+pad;if(size<=0)throw new RangeError('Expanded wall size must be positive');
   const geometry=new THREE.BufferGeometry(),positions=[],normals=[],uvs=[],indices=[];
   geometry.type='WallShellGeometry';
   const half=size/2,lowY=y-height/2,highY=y+height/2;
-  const boxes=walls.map(p=>{const x=(p.x-7)*unit,z=(p.z-7)*unit;return {minX:x-half,maxX:x+half,minZ:z-half,maxZ:z+half};});
+  const boxes=walls.map(p=>{const x=(p.x-center.x)*unit,z=(p.z-center.z)*unit;return {minX:x-half,maxX:x+half,minZ:z-half,maxZ:z+half};});
+  // The same transition bounds drive movement, sight and the visible wall. Union
+  // them with the cell walls so their trim never overlaps another visible face.
+  for(const p of transitions){const x=(p.x-center.x)*unit,z=(p.z-center.z)*unit,hx=p.halfX*unit+pad/2,hz=p.halfZ*unit+pad/2;boxes.push({minX:x-hx,maxX:x+hx,minZ:z-hz,maxZ:z+hz});}
   // Only collapse floating-point aliases of the same mathematical coordinate.
   const tolerance=value=>Number.EPSILON*64*Math.max(1,Math.abs(value),unit);
   const sortedUnique=values=>{const result=[];for(const value of values.sort((a,b)=>a-b))if(!result.length||Math.abs(value-result.at(-1))>tolerance(value))result.push(value);return result;};

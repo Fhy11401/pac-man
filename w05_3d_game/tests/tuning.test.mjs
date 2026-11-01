@@ -1,12 +1,14 @@
+import {mazeGame} from './helpers/game-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGame,tick} from '../src/core.js';
 import {MouseLook,MouseResistance} from '../src/look-input.js';
 import {SHARDS} from '../src/world.js';
+import {straightCorridor} from './helpers/map-fixtures.js';
 
 test('Zero inertia retains the startup ramp and exact release option',()=>{
  for(const fps of [30,60,144]){
-  const game=createGame({sprintSpeed:3.2,sprintStart:.2,movementInertia:0});let last=0;
+  const game=mazeGame({sprintSpeed:3.2,sprintStart:.2,movementInertia:0});game.player=straightCorridor().at(0);let last=0;
   for(let i=1;i<=Math.ceil(fps*.2);i++){
    tick(game,{x:1,z:0,run:true},1/fps);assert.ok(game.moveSpeed>=last);last=game.moveSpeed;
    assert.ok(Math.abs(last-Math.min(3.2,3.2/.2*i/fps))<1e-9);
@@ -18,12 +20,12 @@ test('Zero inertia retains the startup ramp and exact release option',()=>{
 
 test('Per-run speeds apply to walking and both pursuit stages without changing defaults',()=>{
  const tuning={playerSpeed:1.9,sprintSpeed:3.3,enemySpeed:2.2,escapeEnemySpeed:2.7,walkStart:.04};
- const normal=createGame(tuning),escape=createGame(tuning),fresh=createGame();
- for(const game of [normal,escape]){game.player={x:13,z:1};game.enemy={x:9,z:1};game.enemyDelay=0;}
+ const hall=straightCorridor(5),normal=mazeGame(tuning),escape=mazeGame(tuning),fresh=mazeGame();
+ for(const game of [normal,escape]){game.player=hall.at(4);game.enemy=hall.at(0);game.enemyDelay=0;}
  escape.collected=new Set(SHARDS.map((_,i)=>i));
  tick(normal,{x:0,z:0},.1);tick(escape,{x:0,z:0},.1);
- assert.ok(Math.abs(normal.enemy.x-9-.22)<1e-9);assert.ok(Math.abs(escape.enemy.x-9-.27)<1e-9);
- const walk=createGame(tuning);tick(walk,{x:1,z:0},.1);tick(walk,{x:1,z:0},.1);assert.ok(Math.abs(walk.playerVelocity.x-1.9)<1e-9);
+ assert.ok(Math.abs(normal.enemy.x-hall.origin.x-.22)<1e-9);assert.ok(Math.abs(escape.enemy.x-hall.origin.x-.27)<1e-9);
+ const walk=mazeGame(tuning);walk.player=hall.at(0);tick(walk,{x:1,z:0},.1);tick(walk,{x:1,z:0},.1);assert.ok(Math.abs(walk.playerVelocity.x-1.9)<1e-9);
  normal.tuning.enemySpeed=3;assert.equal(escape.tuning.enemySpeed,2.2);assert.equal(fresh.tuning.enemySpeed,2.05);
 });
 

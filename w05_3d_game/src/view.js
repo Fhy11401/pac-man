@@ -1,8 +1,9 @@
 import {DEFAULT_TUNING} from './tuning.js';
 import * as THREE from '../vendor/three.module.js';
-import { MAP, SHARDS, EXIT, ENEMY_START, isOpen, RULES,CELL_SIZE,wallInset } from './world.js';
-import {decorateHotel} from './hotel-detail.js';
-import {decorateReferenceCorridor} from './reference-corridor.js';
+import { MAP, MAP_CENTER, MAP_WIDTH, MAP_HEIGHT, SHARDS, EXIT, ENEMY_START, isOpen, RULES,CELL_SIZE,wallInset,transitionWalls,isInSafeRoom } from './world.js';
+import {decorateHotel,createHotelDoor} from './hotel-detail.js';
+import {decorateMapLandmarks} from './map-landmarks.js';
+import {buildSafeRoom} from './safe-room-view.js';
 import {hotelTexture as texture,makeHotelMaterials} from './hotel-materials.js';
 import {SCARE_TURN_SECONDS,renderPixelRatio,angularTurnRate} from './presentation.js';
 import {PlayerMotion} from './player-motion.js';
@@ -16,41 +17,80 @@ import {beveledBoxGeometry} from './joinery.js';
 import {FilmLight} from './film-light.js';
 import {createWallShell} from './wall-shell.js';
 export const UNIT = CELL_SIZE;
-const world = (x,z,y=0) => new THREE.Vector3((x-7)*UNIT,y,(z-7)*UNIT);
+const world = (x,z,y=0) => new THREE.Vector3((x-MAP_CENTER.x)*UNIT,y,(z-MAP_CENTER.z)*UNIT);
 function glowTexture(){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,1,32,32,32);g.addColorStop(0,'#fff');g.addColorStop(.15,'#d99cffbb');g.addColorStop(.5,'#8c3cbd30');g.addColorStop(1,'#0000');x.fillStyle=g;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
 export class WorldView {
   constructor(container,tuning=DEFAULT_TUNING){
     this.disposed=false;
+    this.loadingListeners=new Set();this.loadingProgress={stage:'assets',completed:0,total:0,ratio:0};
     this.corridorWidth=tuning.corridorWidth??DEFAULT_TUNING.corridorWidth;this.wallInset=wallInset(this.corridorWidth);this.eyeHeight=tuning.eyeHeight??DEFAULT_TUNING.eyeHeight;
     this.ceilingHeight=tuning.ceilingHeight??DEFAULT_TUNING.ceilingHeight;
     this.horizontalFov=DEFAULT_TUNING.fov;this.motionTuning={...DEFAULT_TUNING,...tuning};this.playerMotion=new PlayerMotion();this.enemyPhase=0;this.enemyHeading=-Math.PI/2;
     this.reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');this.motionEnabled=!this.reducedMotion.matches;
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#0d0b11');this.scene.fog=new THREE.Fog('#0d0b11',10,28);
     this.camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.045,70);this.camera.rotation.order='YXZ';
-    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(renderPixelRatio(innerWidth,innerHeight,devicePixelRatio));this.renderer.setSize(innerWidth,innerHeight);this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.672;this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.append(this.renderer.domElement);this.renderer.domElement.tabIndex=0;
+    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.setPixelRatio(renderPixelRatio(innerWidth,innerHeight,devicePixelRatio));this.renderer.setSize(innerWidth,innerHeight);this.renderer.transmissionResolutionScale=.5;this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.672;this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.append(this.renderer.domElement);this.renderer.domElement.tabIndex=0;
     this.environmentTarget=hotelEnvironment(this.renderer);this.scene.environment=this.environmentTarget.texture;
     this.scene.add(new THREE.HemisphereLight(0xc6c8c6,0x48414b,.19));
     this.scene.add(new THREE.AmbientLight(0xadb1b2,.07));
     // Preserve the outline of nearby walls without making the whole corridor bright.
     this.cameraLight=new THREE.PointLight(0xbcc1bb,.18,3.5,2);this.scene.add(this.cameraLight);
-    this.assetJobs=[];this.mat=makeHotelMaterials(this.assetJobs);this.detailAudit={crookedPictures:0,ajarDoors:0,luggage:0,maxPropProjection:0};
-    this.buildMap();decorateHotel(this,world,UNIT);decorateReferenceCorridor(this,world,UNIT);addContactOcclusion(this,world,UNIT);this.batchStaticMeshes();this.freezeStaticWorld();this.buildShards();this.buildExit();this.buildEnemy();this.buildScare();
+    this.assetJobs=[];this.mat=makeHotelMaterials(this.assetJobs,this.ceilingHeight,MAP_WIDTH,MAP_HEIGHT);this.detailAudit={crookedPictures:0,ajarDoors:0,luggage:0,maxPropProjection:0};
+    this.buildMap();decorateHotel(this,world,UNIT);decorateMapLandmarks(this,world,UNIT);addContactOcclusion(this,world,UNIT);this.batchStaticMeshes();this.freezeStaticWorld();this.safeRoom=buildSafeRoom(this,world,UNIT);this.buildShards();this.buildExit();this.buildEnemy();this.assetJobs.push(applyHotelAsset(this.attendantMat.porcelain,'leather',{repeat:[3,1.5],normalScale:.32}));this.buildScare();
     // Static shadow maps update only when a pool slot moves to another real fixture.
     // Downward cones keep the warm light local and prevent light leaking through walls.
-    this.lights=Array.from({length:10},()=>{const light=new THREE.SpotLight(0xffd29f,10,6.2,Math.PI/3.1,.78,2);light.castShadow=true;light.shadow.mapSize.set(512,512);light.shadow.camera.near=.06;light.shadow.bias=-.00015;light.shadow.normalBias=.025;light.shadow.autoUpdate=false;light.userData.fixture=-1;this.scene.add(light,light.target);return light;});this.lightClock=1;
+    this.lights=Array.from({length:10},()=>{const light=new THREE.SpotLight(0xffd29f,10,6.2,Math.PI/3.1,.78,2);light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.camera.near=.06;light.shadow.bias=-.00015;light.shadow.normalBias=.025;light.shadow.autoUpdate=false;light.userData.fixture=-1;this.scene.add(light,light.target);return light;});this.lightClock=1;
     this.lampHalos=lampHalos(this.lights.length);this.scene.add(this.lampHalos);
+    this.scene.traverse(object=>{for(const material of [object.material].flat()){if(material?.isMeshStandardMaterial&&!material.envMap){material.envMap=this.environmentTarget.texture;material.needsUpdate=true;}}});
     this.film=new FilmLight(this.renderer);this.lampHalos.visible=!this.film.enabled;
     this.resize=()=>{this.camera.aspect=innerWidth/innerHeight;this.updateFov();this.renderer.setPixelRatio(renderPixelRatio(innerWidth,innerHeight,devicePixelRatio));this.renderer.setSize(innerWidth,innerHeight);this.film.resize();};window.addEventListener('resize',this.resize);this.updateFov();
-    this.ready=Promise.all(this.assetJobs).then(results=>{
-      this.assetAudit=results;if(this.disposed)return;
+    this.ready=this.prepareAssets();
+  }
+  onLoadingProgress(callback){
+    if(this.disposed)return()=>{};
+    this.loadingListeners.add(callback);callback(this.loadingProgress);
+    return()=>this.loadingListeners.delete(callback);
+  }
+  reportLoading(stage,completed,total,ratio){
+    if(this.disposed)return;
+    this.loadingProgress={stage,completed,total,ratio:Math.max(this.loadingProgress.ratio,Math.min(1,ratio))};
+    for(const callback of this.loadingListeners)callback(this.loadingProgress);
+  }
+  async prepareAssets(){
+      let completed=0;const total=this.assetJobs.length;
+      this.reportLoading('assets',0,total,0);
+      this.assetAudit=await Promise.all(this.assetJobs.map(job=>Promise.resolve(job).then(result=>{this.reportLoading('assets',++completed,total,total?completed/total*.82:.82);return result;})));
+      if(this.disposed)return;
+      // Upload decoded surface maps before movement; first visibility of a
+      // distant door or face must not synchronously upload its texture set.
+      const loadedTextures=new Set();
+      for(const scene of [this.scene,this.scareScene])scene.traverse(object=>{
+        for(const material of [object.material].flat())if(material)for(const value of Object.values(material)){
+          if(value?.isTexture&&!value.isRenderTargetTexture)loadedTextures.add(value);
+        }
+      });
+      const nextPaint=()=>new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
+      this.reportLoading('upload',0,loadedTextures.size,.82);
+      await nextPaint();if(this.disposed)return;
+      let uploaded=0,sliceStarted=performance.now();
+      for(const texture of loadedTextures){
+        if(this.disposed)return;
+        this.renderer.initTexture(texture);uploaded++;
+        this.reportLoading('upload',uploaded,loadedTextures.size,.82+.14*uploaded/loadedTextures.size);
+        // Give the progress overlay a paint between GPU upload batches.
+        if(performance.now()-sliceStarted>=8){await nextPaint();sliceStarted=performance.now();}
+      }
+      this.reportLoading('warmup',0,1,.96);
+      await nextPaint();if(this.disposed)return;
       // compileAsync leaves a readiness timer alive after renderer.dispose().
       // Developer sliders can rebuild immediately; compile synchronously once
       // on the menu so no stale shader poll can touch a destroyed renderer.
       this.film.warmup(this.scene,this.camera,this.scareScene,this.scareCamera);
-    });
+      this.reportLoading('ready',1,1,1);
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;
+    this.loadingListeners.clear();
     window.removeEventListener('resize',this.resize);
     const geometries=new Set(),materials=new Set(),textures=new Set();
     for(const scene of [this.scene,this.scareScene])scene.traverse(object=>{
@@ -58,7 +98,7 @@ export class WorldView {
       if(object.material)for(const material of [object.material].flat())materials.add(material);
       object.shadow?.map?.dispose();
     });
-    for(const material of materials){for(const value of Object.values(material))if(value?.isTexture)textures.add(value);material.dispose();}
+    for(const material of materials){for(const value of Object.values(material))if(value?.isTexture&&value!==this.environmentTarget?.texture)textures.add(value);material.dispose();}
     for(const texture of textures)texture.dispose();for(const geometry of geometries)geometry.dispose();
     this.film?.dispose();this.environmentTarget?.dispose();this.renderer.dispose();this.renderer.domElement.remove();
   }
@@ -80,38 +120,21 @@ export class WorldView {
     for(const [h,y,pad,mat] of [[height,height/2,0,this.mat.paper],[.94,.47,.018,this.mat.panel],[.055,.97,.04,this.mat.trim],[.12,.06,.04,this.mat.black],[.10,height-.06,.05,this.mat.trim],[.045,height-.15,.035,this.mat.trim]]){
       // Shadow the near face too: back-face-only depth can leak at wall/trim joins.
       mat.shadowSide=THREE.DoubleSide;
-      const mesh=this.mesh(createWallShell(walls,UNIT,this.wallInset,h,y,pad),mat);mesh.castShadow=true;
+      const mesh=this.mesh(createWallShell(walls,UNIT,this.wallInset,h,y,pad,MAP_CENTER,transitionWalls(this.corridorWidth)),mat);mesh.castShadow=true;
     }
-    const carpet=texture('carpet');carpet.repeat.set(15,15);const floor=this.mesh(new THREE.PlaneGeometry(15*UNIT,15*UNIT),new THREE.MeshStandardMaterial({map:carpet,roughness:1}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;
+    const carpet=texture('carpet');carpet.repeat.set(MAP_WIDTH,MAP_HEIGHT);const floor=this.mesh(new THREE.PlaneGeometry(MAP_WIDTH*UNIT,MAP_HEIGHT*UNIT),new THREE.MeshStandardMaterial({map:carpet,roughness:1}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;
     floor.material.envMapIntensity=.04;floor.material.color.setHex(0xb49ca7);
-    this.assetJobs.push(applyHotelAsset(floor.material,'carpet',{repeat:[25,25],bump:.0018}));
-    const ceiling=this.mesh(new THREE.PlaneGeometry(15*UNIT,15*UNIT),this.mat.ceiling);ceiling.rotation.x=Math.PI/2;ceiling.position.y=height;ceiling.receiveShadow=true;
+    this.assetJobs.push(applyHotelAsset(floor.material,'carpet',{repeat:[MAP_WIDTH*25/15,MAP_HEIGHT*25/15],bump:.0018}));
+    const ceiling=this.mesh(new THREE.PlaneGeometry(MAP_WIDTH*UNIT,MAP_HEIGHT*UNIT),this.mat.ceiling);ceiling.rotation.x=Math.PI/2;ceiling.position.y=height;ceiling.receiveShadow=true;
     this.lampPositions=[];let doorNumber=201;const shadeMaterial=this.mat.cloth;
     MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{
-      if(tile==='#'||(z===1&&x>=1&&x<=5))return;
+      if(tile==='#'||isInSafeRoom({x,z}))return;
       const edges=[{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2},{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0}].filter(d=>!isOpen(x+d.x,z+d.z));
       for(const d of edges){
         const hash=x*17+z*13+(d.x+1)*3+d.z;
         if(hash%7===0&&!(x===1&&z===1)){
           const g=new THREE.Group();g.position.copy(world(x+d.x*(.485-this.wallInset),z+d.z*(.485-this.wallInset)));g.rotation.y=d.a;this.scene.add(g);
-          // The dark backing and projecting jamb make the leaf sit inside a deep frame.
-          this.box(1.13,2.30,.018,this.mat.black,0,1.15,.002,g);
-          const hinge=new THREE.Group();hinge.position.set(-.455,1.15,.036);g.add(hinge);
-          const ajar=doorNumber%11===5;if(ajar){hinge.rotation.y=-.11;this.detailAudit.ajarDoors++;}
-          const leaf=this.box(.91,2.26,.04,this.mat.wood,.455,0,.01,hinge);leaf.castShadow=true;
-          for(const side of [-.55,.55]){const jamb=this.box(.085,2.34,.16,this.mat.wood,side,1.17,.068,g);jamb.castShadow=true;}
-          const lintel=this.box(1.18,.10,.16,this.mat.wood,0,2.34,.068,g);lintel.castShadow=true;
-          for(const yy of [-.54,.43]){
-            this.box(.69,.74,.012,this.mat.black,.455,yy,.034,hinge);
-            this.box(.61,.65,.014,this.mat.wood,.455,yy,.043,hinge);
-            for(const side of [-1,1]){
-              this.box(.025,.73,.029,this.mat.wood,.455+side*.337,yy,.055,hinge);
-              this.box(.66,.025,.029,this.mat.wood,.455,yy+side*.358,.055,hinge);
-            }
-          }
-          this.box(.052,.18,.016,this.mat.brass,.75,-.055,.05,hinge);
-          const handle=this.mesh(new THREE.CapsuleGeometry(.014,.09,4,8),this.mat.brass,hinge);handle.rotation.z=Math.PI/2;handle.position.set(.70,-.055,.09);
-          const c=document.createElement('canvas');c.width=128;c.height=64;const cx=c.getContext('2d');cx.fillStyle='#302923';cx.fillRect(0,0,128,64);cx.strokeStyle='#74664d';cx.strokeRect(3,3,122,58);cx.fillStyle='#c1ae8d';cx.font='28px Georgia';cx.textAlign='center';cx.fillText(String(doorNumber++),64,42);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;const sign=this.mesh(new THREE.PlaneGeometry(.23,.115),new THREE.MeshStandardMaterial({map:t,roughness:.72,metalness:.15}),hinge);sign.position.set(.455,.66,.038);
+          createHotelDoor(this,g,doorNumber,{ajar:doorNumber%11===5});doorNumber++;
 
         } else if(edges.length!==2&&hash%4===0){
           // Occasional small sconces mark junctions; the narrow halls use ceiling bowls.
@@ -133,8 +156,8 @@ export class WorldView {
     const shoulders=this.mesh(new THREE.CylinderGeometry(.18,.43,.6,28),coat,this.scareFace);shoulders.position.set(0,-.56,-.10);
     for(const side of [-1,1]){const collar=this.box(.12,.20,.055,this.mat.black,side*.12,-.31,.04,this.scareFace);collar.rotation.z=side*.38;}
     for(const y of [-.46,-.61,-.76])this.box(.022,.022,.02,this.mat.brass,0,y,.21,this.scareFace);
-    this.scareScene.add(new THREE.AmbientLight(0x8a6a70,.7));const red=new THREE.PointLight(0xff3527,2.2,4,1);red.position.set(-.3,.2,.15);this.scareScene.add(red);
-    const cold=new THREE.PointLight(0xd5c8ae,1.3,3,1);cold.position.set(.4,.3,.1);this.scareScene.add(cold);
+    this.scareScene.add(new THREE.AmbientLight(0x8a6a70,.24));const red=new THREE.PointLight(0xff3527,.85,4,1);red.position.set(-.55,.3,-.10);this.scareScene.add(red);
+    const cold=new THREE.PointLight(0xe4dece,2.1,3,1);cold.position.set(.62,.45,-.13);this.scareScene.add(cold);
   }
   drawScare(game,time){
     if(game.phase!=='caught')return;
@@ -201,11 +224,12 @@ export class WorldView {
   }
   buildExit(){
     const height=Math.min(2.3,this.ceilingHeight-.4);
-    this.exit=new THREE.Group();this.exit.position.copy(world(.53+this.wallInset,EXIT.z));this.exit.rotation.y=Math.PI/2;this.scene.add(this.exit);
+    const exitFace=[{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0},{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2}].find(face=>!isOpen(EXIT.x+face.x,EXIT.z+face.z));
+    this.exit=new THREE.Group();this.exit.position.copy(world(EXIT.x+exitFace.x*(.5-this.wallInset),EXIT.z+exitFace.z*(.5-this.wallInset)));this.exit.rotation.y=exitFace.a;this.scene.add(this.exit);
     for(const side of [-.7,.7])this.box(.12,height,.2,this.mat.brass,side,height/2,0,this.exit);this.box(1.52,.12,.2,this.mat.brass,0,height,0,this.exit);
     this.exitMaterial=new THREE.MeshBasicMaterial({color:0x9470c2,transparent:true,opacity:.12,side:THREE.DoubleSide});const field=this.mesh(new THREE.PlaneGeometry(1.25,height-.10),this.exitMaterial,this.exit);field.position.y=height/2;
     this.exitRing=this.mesh(new THREE.TorusGeometry(.48,.025,8,64),new THREE.MeshBasicMaterial({color:0xb18fd3}),this.exit);this.exitRing.position.set(0,1.2,.08);
-    const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');x.fillStyle='#121416';x.fillRect(0,0,512,128);x.fillStyle='#b9d1bd';x.font='bold 44px Microsoft YaHei';x.textAlign='center';x.fillText('大堂 / LOBBY',256,82);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;const sign=this.mesh(new THREE.PlaneGeometry(1.3,.24),new THREE.MeshBasicMaterial({map:t}),this.exit);sign.position.set(0,height+.19,.06);
+    const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');x.fillStyle='#121416';x.fillRect(0,0,512,128);x.fillStyle='#b9d1bd';x.font='bold 44px Microsoft YaHei';x.textAlign='center';x.fillText('出口 / EXIT',256,82);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;const sign=this.mesh(new THREE.PlaneGeometry(1.3,.24),new THREE.MeshBasicMaterial({map:t}),this.exit);sign.position.set(0,height+.19,.06);
   }
   buildEnemy(){
     this.attendantMat=attendantMaterials();const model=createAttendant(this.attendantMat);
@@ -214,6 +238,7 @@ export class WorldView {
   }
   render(game,yaw,pitch,time,dt=1/60,active=true,motionScale=1){
     if(this.lastGame!==game){this.lastGame=game;this.shardFade.fill(1);this.enemyHeading=-Math.PI/2;this.playerMotion.reset();this.lastViewYaw=null;}
+    this.safeRoom.update(game,dt);
     const speed=Math.hypot(game.playerVelocity.x,game.playerVelocity.z);
     const turnRate=angularTurnRate(this.lastViewYaw,yaw,dt);this.lastViewYaw=active&&game.phase==='playing'?yaw:null;
     const motion=this.playerMotion.update(speed,dt,this.motionTuning,{active:active&&game.phase==='playing',motion:this.motionEnabled&&!this.reducedMotion.matches,scale:motionScale,turnRate});this.updateFov();
@@ -223,13 +248,13 @@ export class WorldView {
       const target=Math.atan2(game.player.x-game.enemy.x,game.player.z-game.enemy.z);
       this.enemyHeading+=Math.atan2(Math.sin(target-this.enemyHeading),Math.cos(target-this.enemyHeading))*(1-Math.exp(-dt*22));
     }
-    this.enemy.visible=game.phase!=='caught'||RULES.caughtSeconds-game.caught<SCARE_TURN_SECONDS;
+    this.enemy.visible=game.entryOpened&&(game.phase!=='caught'||RULES.caughtSeconds-game.caught<SCARE_TURN_SECONDS);
     this.enemy.position.copy(world(game.enemy.x,game.enemy.z));this.enemy.rotation.y=this.enemyHeading;this.enemyBody.position.y=Math.abs(Math.sin(this.enemyPhase))*.018;this.enemyBody.rotation.x=.055;this.enemyBody.rotation.z=Math.sin(this.enemyPhase)*.012;this.enemyLimbs.forEach(({node,elbow,side,leg})=>{node.rotation.x=Math.sin(this.enemyPhase)*side*(leg?.42:-.28);if(elbow)elbow.rotation.x=-.28+Math.sin(this.enemyPhase)*side*.10;});
-    this.warningLight.position.copy(world(game.enemy.x,game.enemy.z,1.05));this.warningLight.target.position.copy(this.warningLight.position).add(new THREE.Vector3(Math.sin(this.enemyHeading)*5,-1.02,Math.cos(this.enemyHeading)*5));this.warningLight.intensity=game.phase==='playing'?110:0;
+    this.warningLight.position.copy(world(game.enemy.x,game.enemy.z,1.05));this.warningLight.target.position.copy(this.warningLight.position).add(new THREE.Vector3(Math.sin(this.enemyHeading)*5,-1.02,Math.cos(this.enemyHeading)*5));this.warningLight.intensity=game.entryOpened&&!isInSafeRoom(game.player)&&game.phase==='playing'?110:0;
     if(game.phase==='playing'&&(Math.abs(game.enemy.x-this.warningShadowPose.x)>1e-6||Math.abs(game.enemy.z-this.warningShadowPose.z)>1e-6||Math.abs(this.enemyHeading-this.warningShadowPose.heading)>1e-6)){
       this.warningLight.shadow.needsUpdate=true;Object.assign(this.warningShadowPose,{x:game.enemy.x,z:game.enemy.z,heading:this.enemyHeading});
     }
-    SHARDS.forEach((p,i)=>{if(this.shardFade[i]===0)return;const fade=this.shardFade[i]=Math.max(0,this.shardFade[i]-(game.collected.has(i)?dt*6:0));const dummy=this.dummy;dummy.position.set((p.x-7)*UNIT,.87+Math.sin(time*2+i)*.035+(1-fade)*.2,(p.z-7)*UNIT);dummy.rotation.set(0,time*.9+i*.4,0);dummy.scale.setScalar(fade);dummy.updateMatrix();this.shardMesh.setMatrixAt(i,dummy.matrix);dummy.quaternion.copy(this.camera.quaternion);dummy.updateMatrix();this.shardGlow.setMatrixAt(i,dummy.matrix);});this.shardMesh.instanceMatrix.needsUpdate=true;this.shardGlow.instanceMatrix.needsUpdate=true;
+    SHARDS.forEach((p,i)=>{if(this.shardFade[i]===0)return;const fade=this.shardFade[i]=Math.max(0,this.shardFade[i]-(game.collected.has(i)?dt*6:0));const dummy=this.dummy;dummy.position.copy(world(p.x,p.z,.87+Math.sin(time*2+i)*.035+(1-fade)*.2));dummy.rotation.set(0,time*.9+i*.4,0);dummy.scale.setScalar(fade);dummy.updateMatrix();this.shardMesh.setMatrixAt(i,dummy.matrix);dummy.quaternion.copy(this.camera.quaternion);dummy.updateMatrix();this.shardGlow.setMatrixAt(i,dummy.matrix);});this.shardMesh.instanceMatrix.needsUpdate=true;this.shardGlow.instanceMatrix.needsUpdate=true;
     const unlocked=game.collected.size===SHARDS.length;this.exitMaterial.color.setHex(unlocked?0x74f2b8:0x9470c2);this.exitMaterial.opacity=unlocked?.27+Math.sin(time*3)*.05:.08;this.exitRing.material.color.setHex(unlocked?0x9bffcc:0x5a3d72);this.exitRing.rotation.z=time*(unlocked?.6:.06);
     this.lightClock+=dt;if(this.lightClock>.05){this.lightClock=0;
       // Prelight the view ahead (~half a second of running), not just the closest bulbs.
@@ -242,6 +267,6 @@ export class WorldView {
       for(const light of this.lights){if(wanted.has(light.userData.fixture))continue;const lamp=nearest.find(lamp=>!used.has(lamp.index));if(!lamp){light.visible=false;continue;}used.add(lamp.index);light.visible=true;light.userData.fixture=lamp.index;light.intensity=lamp.position.strength??(lamp.position.isCorner?14:10);light.distance=lamp.position.reach??6.2;light.angle=lamp.position.angle??Math.PI/3.1;light.shadow.normalBias=lamp.position.normalBias??.025;light.color.setHex(lamp.position.warmth??0xffd29f);light.position.copy(lamp.position);light.target.position.copy(lamp.position);light.target.position.y=0;light.target.position.x+=lamp.position.aimX??0;light.target.position.z+=lamp.position.aimZ??0;light.shadow.needsUpdate=true;}
     }
     this.lights.forEach((light,i)=>{const dummy=this.dummy;dummy.position.copy(light.position);dummy.position.y+=.08;dummy.quaternion.copy(this.camera.quaternion);dummy.scale.setScalar(light.visible&&light.intensity>6?.72:0);dummy.updateMatrix();this.lampHalos.setMatrixAt(i,dummy.matrix);});this.lampHalos.instanceMatrix.needsUpdate=true;
-    this.film.render(this.scene,this.camera,()=>this.drawScare(game,time));
+    this.film.render(this.scene,this.camera,()=>this.drawScare(game,time),game.phase==='caught'?0:this.motionTuning.contactShadows??.85);
   }
 }

@@ -1,6 +1,8 @@
-import { MAP,START, ENEMY_START, EXIT, SHARDS, RULES, distance, cell, isOpen, pathTo,wallInset } from './world.js';
+import { MAP,START, ENEMY_START, EXIT, SHARDS, RULES, ENTRY_GATE, isInSafeRoom, distance, cell, isOpen, pathTo,wallInset,transitionWalls } from './world.js';
 import {MOVEMENT_KEYS} from './tuning.js';
 import {movementVelocity,slideMove,steerVelocity} from './movement.js';
+import {hasMazeSight} from './visibility.js';
+import {entryCollisionWalls,stepEntry} from './entry-state.js';
 const mapWidth=MAP[0].length,shardByCell=new Int16Array(mapWidth*MAP.length).fill(-1);
 SHARDS.forEach((p,index)=>shardByCell[p.z*mapWidth+p.x]=index);
 
@@ -20,7 +22,7 @@ function collectAlongTravel(game,travel){
 export function createGame(tuning={}) {
   return { tuning: Object.fromEntries(MOVEMENT_KEYS.map(key=>[key,tuning[key]??RULES[key]])), player: { ...START }, enemy: { ...ENEMY_START }, enemyNext: null,
     collected: new Set(), lives: RULES.lives, phase: 'playing',
-    elapsed: 0, respawn: 0, caught: 0, deaths: 0, events: [], enemyDelay: RULES.enemyDelay,
+    elapsed: 0, respawn: 0, caught: 0, deaths: 0, events: [], enemyDelay: RULES.enemyDelay,entryOpened:false,entryBreakTime:0,
     moveSpeed: 0, sprinting: false, moveHeading:null, motionVelocity:{x:0,z:0},playerVelocity: { x: 0, z: 0 }, enemyVelocity: { x: 0, z: 0 } };
 }
 export function blocked(p, radius = RULES.playerRadius,width=RULES.corridorWidth) {
@@ -32,6 +34,11 @@ export function blocked(p, radius = RULES.playerRadius,width=RULES.corridorWidth
     const nearZ = Math.max(z - half, Math.min(z + half, p.z));
     if ((p.x - nearX) ** 2 + (p.z - nearZ) ** 2 < radius ** 2) return true;
   }
+  for(const wall of transitionWalls(width)){
+    const nearX=Math.max(wall.x-wall.halfX,Math.min(wall.x+wall.halfX,p.x));
+    const nearZ=Math.max(wall.z-wall.halfZ,Math.min(wall.z+wall.halfZ,p.z));
+    if((p.x-nearX)**2+(p.z-nearZ)**2<radius**2)return true;
+  }
   return false;
 }
 function movePlayer(game, input, dt) {
@@ -41,7 +48,7 @@ function movePlayer(game, input, dt) {
   game.sprinting = Boolean(input.run && length > .001);
   const velocity=movementVelocity(game.motionVelocity,input,game.tuning,dt);
   const before = { ...game.player };
-  const result=slideMove(before,{x:velocity.x*dt,z:velocity.z*dt},game.tuning.playerRadius,game.tuning.corridorWidth);
+  const result=slideMove(before,{x:velocity.x*dt,z:velocity.z*dt},game.tuning.playerRadius,game.tuning.corridorWidth,entryCollisionWalls(game));
   game.player=result.position;
   // Remove only the velocity into contacted walls; don't keep stored pressure against a wall.
   for(const hit of result.contacts){const inward=velocity.x*hit.nx+velocity.z*hit.nz;if(inward<0){velocity.x-=inward*hit.nx;velocity.z-=inward*hit.nz;}}
@@ -68,15 +75,21 @@ function moveEnemy(game, dt) {
   let remaining = (game.collected.size === SHARDS.length ? game.tuning.escapeEnemySpeed : game.tuning.enemySpeed) * dt;
   while (remaining > 0) {
     if (!game.enemyNext) {
-      const path = pathTo(game.enemy, game.player);
-      game.enemyNext = path[1] ?? { ...game.player };
+      const target=isInSafeRoom(game.player)?ENTRY_GATE.outside:game.player,path=pathTo(game.enemy,target);
+      if(path.length>1){
+        // An off-centre final pursuit may need to rejoin its cell centre before
+        // starting a new corridor edge. Never cut a partition or inside corner.
+        game.enemyNext=distance(game.enemy,path[0])>.00001?path[0]:path[1];
+      }else if(path.length===1&&hasMazeSight(game.enemy,target,game.tuning.corridorWidth))game.enemyNext={...target};
+      else break;
     }
+    if(isInSafeRoom(game.enemyNext)||!hasMazeSight(game.enemy,game.enemyNext,game.tuning.corridorWidth)){game.enemyNext=null;break;}
     const d = distance(game.enemy, game.enemyNext);
     if (d < .00001) { game.enemyNext = null; break; }
     const amount = Math.min(d, remaining);
     const next = { x: game.enemy.x + (game.enemyNext.x - game.enemy.x) / d * amount,
       z: game.enemy.z + (game.enemyNext.z - game.enemy.z) / d * amount };
-    if (blocked(next, RULES.enemyRadius,game.tuning.corridorWidth)) { game.enemyNext = null; break; }
+    if (isInSafeRoom(next)||blocked(next, RULES.enemyRadius,game.tuning.corridorWidth)||!hasMazeSight(game.enemy,next,game.tuning.corridorWidth)) { game.enemyNext = null; break; }
     game.enemy = next; remaining -= amount;
     if (amount >= d - .00001) game.enemyNext = null;
   }
@@ -90,6 +103,13 @@ function loseLife(game) {
   game.playerVelocity = { x: 0, z: 0 }; game.enemyVelocity = { x: 0, z: 0 };
   // Keep the actual contact position visible until the scare has faded to black.
   game.phase = 'caught'; game.caught = RULES.caughtSeconds;
+}
+function reachedExit(game){
+  // A usable arrival area inside the exit cell. Wide-hall wall hugging must not
+  // require steering the player's centre onto a tiny point in the floor.
+  const sideClearance=.5-wallInset(game.tuning.corridorWidth)-game.tuning.playerRadius;
+  const reach=Math.max(RULES.exitRadius,sideClearance+.04);
+  return distance(game.player,EXIT)<=reach&&hasMazeSight(game.player,EXIT,game.tuning.corridorWidth);
 }
 export function tick(game, input, dt) {
   game.events = [];
@@ -113,13 +133,15 @@ export function tick(game, input, dt) {
       if (game.respawn <= 0) { game.phase = 'playing'; game.events.push('respawn'); }
       continue;
     }
-    game.elapsed += step;
+    stepEntry(game,input,step);
     const travel=movePlayer(game, input, step);
     movedX+=travel.at(-1).x-travel[0].x;movedZ+=travel.at(-1).z-travel[0].z;movedTime+=step;
+    if(!game.entryOpened)continue;
+    game.elapsed += step;
     collectAlongTravel(game,travel);
     moveEnemy(game, step);
-    if (distance(game.player, game.enemy) < game.tuning.playerRadius + RULES.enemyRadius) { loseLife(game); break; }
-    if (game.collected.size === SHARDS.length && distance(game.player, EXIT) < RULES.exitRadius) {
+    if (!isInSafeRoom(game.player)&&distance(game.player, game.enemy) < game.tuning.playerRadius + RULES.enemyRadius&&hasMazeSight(game.player,game.enemy,game.tuning.corridorWidth)) { loseLife(game); break; }
+    if (game.collected.size === SHARDS.length && reachedExit(game)) {
       game.phase = 'won'; game.events.push('won'); break;
     }
   }

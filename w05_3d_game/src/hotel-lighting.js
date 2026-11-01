@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.js';
-import {MAP,isOpen} from './world.js';
+import {MAP,isOpen,edgeIsOpen} from './world.js';
 
 // A tiny, prefiltered room probe gives varnish, brass and crystal a real reflection
 // response. Built once per renderer, never captured during gameplay.
@@ -33,17 +33,17 @@ function stripTexture(){
 export function addContactOcclusion(view,world,unit){
   const edges=[];
   MAP.forEach((row,z)=>[...row].forEach((tile,x)=>{if(tile==='#')return;
-    for(const d of [{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2},{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0}])if(!isOpen(x+d.x,z+d.z))edges.push({x,z,...d,cellX:x,cellZ:z});
+    for(const d of [{x:1,z:0,a:-Math.PI/2},{x:-1,z:0,a:Math.PI/2},{x:0,z:1,a:Math.PI},{x:0,z:-1,a:0}])if(!edgeIsOpen({x,z},{x:x+d.x,z:z+d.z})&&!isOpen(x+d.x,z+d.z))edges.push({x,z,...d,cellX:x,cellZ:z});
   }));
-  const material=new THREE.MeshBasicMaterial({map:stripTexture(),transparent:true,depthWrite:false,toneMapped:false,opacity:.6,polygonOffset:true,polygonOffsetFactor:-1});
-  const floor=new THREE.InstancedMesh(new THREE.PlaneGeometry(unit,.40),material,edges.length);
-  const ceiling=new THREE.InstancedMesh(new THREE.PlaneGeometry(unit,.28),material,edges.length);
+  const material=new THREE.MeshBasicMaterial({map:stripTexture(),transparent:true,depthWrite:false,toneMapped:false,opacity:.30,polygonOffset:true,polygonOffsetFactor:-1});
+  const floor=new THREE.InstancedMesh(new THREE.PlaneGeometry(unit,.18),material,edges.length);
+  const ceiling=new THREE.InstancedMesh(new THREE.PlaneGeometry(unit,.12).rotateZ(Math.PI),material,edges.length);
   const dummy=new THREE.Object3D();
   edges.forEach((e,i)=>{
     const along=.5-view.wallInset;
-    dummy.position.copy(world(e.cellX+e.x*(along-.20/unit),e.cellZ+e.z*(along-.20/unit),.018));
+    dummy.position.copy(world(e.cellX+e.x*(along-.09/unit),e.cellZ+e.z*(along-.09/unit),.018));
     dummy.rotation.set(-Math.PI/2,0,e.a);dummy.updateMatrix();floor.setMatrixAt(i,dummy.matrix);
-    dummy.position.copy(world(e.cellX+e.x*(along-.14/unit),e.cellZ+e.z*(along-.14/unit),view.ceilingHeight-.012));
+    dummy.position.copy(world(e.cellX+e.x*(along-.06/unit),e.cellZ+e.z*(along-.06/unit),view.ceilingHeight-.012));
     dummy.rotation.set(Math.PI/2,0,-e.a);dummy.updateMatrix();ceiling.setMatrixAt(i,dummy.matrix);
   });
   floor.name='skirting-contact-occlusion';ceiling.name='ceiling-contact-occlusion';

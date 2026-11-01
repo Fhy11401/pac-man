@@ -1,23 +1,10 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-where node >nul 2>nul
-if not errorlevel 1 (
-  node server.mjs
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0launch-local.ps1" -Page game
+set "LAUNCH_RESULT=%ERRORLEVEL%"
+if not "%LAUNCH_RESULT%"=="0" (
+  echo.
+  echo The game could not be started. See the message above.
   pause
-  exit /b
 )
-if exist "C:\Program Files\WindowsApps\OpenAI.CodexPrimaryRuntime.v26-1017-2736-0_26.1017.2736.0_x64__3k8sg7r9htsxt\dependencies\node\bin\node.exe" (
-  "C:\Program Files\WindowsApps\OpenAI.CodexPrimaryRuntime.v26-1017-2736-0_26.1017.2736.0_x64__3k8sg7r9htsxt\dependencies\node\bin\node.exe" server.mjs
-  pause
-  exit /b
-)
-where py >nul 2>nul
-if not errorlevel 1 (
-  echo Open http://127.0.0.1:5182/ in your browser.
-  py -3 -m http.server 5182 --bind 127.0.0.1
-  pause
-  exit /b
-)
-echo Node.js or Python 3 is required. See README.md for exact run steps.
-pause
+exit /b %LAUNCH_RESULT%

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172c3b">
+  <title>永夜旅馆 · 地图对照 · v2.10.0</title>
+  <link rel="stylesheet" href="./src/map-review.css">
+</head>
+<body>
+  <main class="review-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">THE NIGHT HOTEL <span>地图档案</span></p>
+        <h1>永夜旅馆<span>地图对照</span></h1>
+        <p class="intro">对照原始布局，检查连续折弯与通路变化。</p>
+      </div>
+      <div class="review-actions">
+        <p class="experiment-label"><span aria-hidden="true"></span>v2.10.0 · 随附地图工具</p>
+        <div class="play-links" style="flex-wrap:wrap">
+          <a class="play-link secondary" href="./editor.html">编辑地图 <span aria-hidden="true">↗</span></a>
+          <a class="play-link" href="/" target="_blank" rel="noopener">试玩默认地图 <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </header>
+
+    <section class="plan-desk" aria-label="地图对照工具">
+      <div class="desk-toolbar">
+        <div class="mode-switch" role="group" aria-label="选择地图视图">
+          <button type="button" data-mode="compare" aria-pressed="true">并排对照</button>
+          <button type="button" data-mode="original" aria-pressed="false">历史地图</button>
+          <button type="button" data-mode="revised" aria-pressed="false">当前默认</button>
+          <button type="button" data-mode="overlay" aria-pressed="false">改动叠加</button>
+        </div>
+        <div class="view-options">
+          <label><input type="checkbox" id="show-shards">水晶</label>
+          <label><input type="checkbox" id="show-coordinates" checked>坐标</label>
+          <div class="zoom-controls" role="group" aria-label="地图缩放">
+            <button type="button" id="zoom-out" aria-label="缩小地图">−</button>
+            <button type="button" id="zoom-fit" title="恢复完整地图"><output id="zoom-value">100%</output></button>
+            <button type="button" id="zoom-in" aria-label="放大地图">＋</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="room-note"><strong>默认地图开场</strong><span id="safe-room-summary">安全屋内熟悉操作，击破入口木板后进入迷宫。</span></p>
+
+      <div id="review-status" class="load-status" role="status">正在读取两份地图…</div>
+      <div id="plan-grid" class="plan-grid" data-mode="compare" hidden>
+        <section class="plan-panel" id="original-panel" aria-labelledby="original-title">
+          <header class="plan-heading"><div><span class="plan-kind">历史存档</span><h2 id="original-title">历史地图</h2></div><p class="plan-dimensions" id="original-dimensions"></p></header>
+          <div class="map-viewport" id="original-map"></div>
+        </section>
+        <section class="plan-panel" id="revised-panel" aria-labelledby="revised-title">
+          <header class="plan-heading"><div><span class="plan-kind">正式内置</span><h2 id="revised-title">当前默认地图</h2></div><p class="plan-dimensions" id="revised-dimensions"></p></header>
+          <div class="map-viewport" id="revised-map"></div>
+        </section>
+        <section class="plan-panel" id="overlay-panel" aria-labelledby="overlay-title" hidden>
+          <header class="plan-heading"><div><span class="plan-kind">以当前默认地图为底图</span><h2 id="overlay-title">通路改动叠加</h2></div><p class="plan-dimensions" id="change-count"></p></header>
+          <div class="map-viewport" id="overlay-map"></div>
+        </section>
+      </div>
+
+      <div class="map-legend" aria-label="图例">
+        <span><i class="legend-road"></i>通道</span><span><i class="legend-wall"></i>墙体</span><span><i class="legend-blocker"></i>隔断</span>
+        <span><b class="legend-marker marker-start">S</b>出生</span><span><b class="legend-marker marker-enemy">E</b>敌人</span><span><b class="legend-marker marker-exit">X</b>出口</span>
+        <span class="change-key"><i class="legend-added"></i>新增通道</span><span class="change-key"><i class="legend-removed"></i>封回旧路</span>
+        <span class="safe-key"><i class="legend-safe-room"></i>安全屋</span><span class="safe-key"><i class="legend-entry-gate"></i>可破木板</span>
+        <span class="shard-key" hidden><i class="legend-shard"></i>水晶</span>
+      </div>
+      <div class="map-caption">
+        <p id="map-help">拖拽平移 · 滚轮缩放 · 点选坐标<span class="keyboard-help">；地图内方向键移动选格，Esc 清除，Home 复位</span></p>
+        <output id="coordinate-readout" aria-label="地图坐标">X — · Z —</output>
+      </div>
+    </section>
+
+    <section class="comparison" aria-labelledby="statistics-title" hidden>
+      <div class="comparison-intro"><p class="eyebrow">布局检查</p><h2 id="statistics-title">变化一览</h2><p id="difference-summary"></p></div>
+      <div class="statistics-wrap">
+        <table class="statistics-table">
+          <caption class="sr-only">历史地图与当前默认地图统计</caption>
+          <thead><tr><th scope="col">布局</th><th scope="col">水晶</th><th scope="col">可走格</th><th scope="col">度 2 转角</th><th scope="col">独立环路</th></tr></thead>
+          <tbody id="statistics-body"></tbody>
+        </table>
+        <p class="statistics-note">度 2 转角：仅连通两个方向且形成直角的格子。独立环路按实际连通关系计算，包含隔断影响。<span id="room-cycle-note"></span></p>
+      </div>
+    </section>
+    <footer class="page-footer"><span>本页仅对照布局；试玩在新标签页打开。</span><span id="source-note">历史地图存档 / 当前默认地图</span></footer>
+    <noscript><p class="load-status">请启用 JavaScript 以读取和对比地图。</p></noscript>
+  </main>
+  <script type="module" src="./src/map-review.js"></script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172c3b">
+  <title>永夜旅馆 · 地图工作台 · v2.10.0</title>
+  <link rel="stylesheet" href="./src/map-editor.css">
+</head>
+<body>
+  <div class="editor-app">
+    <header class="editor-header">
+      <a class="workbench-brand" href="./review.html" title="返回地图对照页">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4h24v24H4zM4 12h9V4m0 8v8h7v8m0-8V12h8M4 20h4"/></svg>
+        <div><h1>旅馆地图工作台</h1><small>永夜旅馆 · v2.10.0</small></div>
+      </a>
+      <div class="draft-field">
+        <label for="map-name">草稿名称</label>
+        <input id="map-name" type="text" value="旅馆走廊 · 调整草稿" maxlength="80" autocomplete="off" spellcheck="false">
+        <span id="save-state" class="save-state" role="status" aria-live="polite" data-state="loading">正在读取草稿…</span>
+      </div>
+      <div class="header-actions">
+        <div class="history-actions" role="group" aria-label="编辑历史">
+          <button id="undo" class="icon-button" type="button" aria-label="撤销，Ctrl+Z" title="撤销 · Ctrl+Z" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5-5 5 5 5M5 10h9a5 5 0 0 1 0 10h-3"/></svg></button>
+          <button id="redo" class="icon-button" type="button" aria-label="重做，Ctrl+Shift+Z" title="重做 · Ctrl+Shift+Z" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 5 5-5 5m4-5h-9a5 5 0 0 0 0 10h3"/></svg></button>
+        </div>
+        <div class="file-actions" role="group" aria-label="导入与导出">
+          <input id="import-json" type="file" accept=".json,application/json" hidden>
+          <button id="import-json-button" type="button" title="从 JSON 文件导入地图"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v5h16v-5M12 3v12m-4-4 4 4 4-4"/></svg><span>导入 JSON</span></button>
+          <button id="export-json" type="button" title="保存可再次编辑的 JSON 文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v5h16v-5M12 15V3m-4 4 4-4 4 4"/></svg><span>导出 JSON</span></button>
+          <button id="export-png" type="button" title="导出地图 PNG 图片"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="m3 16 5-5 5 5 3-3 5 5"/><circle cx="16.5" cy="8.5" r="1.5"/></svg><span>导出 PNG</span></button>
+        </div>
+        <button id="play-draft" class="play-draft" type="button" title="检查布局后进入当前草稿试玩"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>试玩草稿</button>
+      </div>
+    </header>
+
+    <main class="editor-workspace">
+      <aside class="tool-rail" aria-label="地图绘制工具">
+        <div class="rail-heading"><h2>工具</h2><span>快捷键</span></div>
+        <div class="tool-buttons" role="group" aria-label="选择编辑工具">
+          <button type="button" data-tool="select" aria-pressed="true" title="选择 · V"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 14 10-7 1-3 7z"/></svg><span>选择</span><kbd>V</kbd></button>
+          <button type="button" data-tool="path" aria-pressed="false" title="绘制通道 · P"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20v-9h8V4h8M8 20v-5h8V8h4"/></svg><span>通道</span><kbd>P</kbd></button>
+          <button type="button" data-tool="wall" aria-pressed="false" title="绘制墙体 · W"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 12h18M8 5v7m8 0v7"/></svg><span>墙体</span><kbd>W</kbd></button>
+          <button type="button" data-tool="shard" aria-pressed="false" title="放置水晶 · C"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 6-1 10-5 4-5-4L6 8zm0 0-2 8 2 12 2-12zM6 8l4 2h4l4-2"/></svg><span>水晶</span><kbd>C</kbd></button>
+          <button type="button" data-tool="erase-shard" aria-pressed="false" aria-label="无水晶橡皮，X" title="仅移除水晶，保留通道 · X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 6-1 10-5 4-5-4L6 8zm0 0-2 8M3 21 21 3"/></svg><span>移除水晶</span><kbd>X</kbd></button>
+          <button type="button" data-tool="barrier" aria-pressed="false" title="添加或移除相邻格间的隔墙 · B"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H3v16h5m8-16h5v16h-5M12 2v20"/></svg><span>格间隔墙</span><kbd>B</kbd></button>
+          <button type="button" data-tool="line" aria-pressed="false" title="拖动两点，拉出一段直通道 · L"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="6" r="2.5"/><path d="m7 16 10-8"/></svg><span>直线通道</span><kbd>L</kbd></button>
+          <button type="button" data-tool="pan" aria-pressed="false" title="拖动画布 · H；也可按住鼠标中键"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12V5a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v6-3a1.5 1.5 0 0 1 3 0v7c0 5-3 7-7 7-3 0-5-2-6-4l-3-5a1.5 1.5 0 0 1 2-2z"/></svg><span>拖图</span><kbd>H</kbd></button>
+          <div class="tool-separator" aria-hidden="true"></div>
+          <button type="button" data-tool="start" aria-pressed="false" title="移动出生点，仅限安全屋内 · S"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V3m0 1h13l-3 4 3 4H5"/></svg><span>出生点</span><kbd>S</kbd></button>
+          <button type="button" data-tool="enemy" aria-pressed="false" title="在有效地面放置敌人 · E"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M9 9l6 6m-6 0 6-6"/></svg><span>敌人</span><kbd>E</kbd></button>
+          <button type="button" data-tool="exit" aria-pressed="false" title="在有效地面放置出口 · O"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3H4v18h7m2-15 6 6-6 6M8 12h12"/></svg><span>出口</span><kbd>O</kbd></button>
+        </div>
+        <div class="brush-options">
+          <label class="check-label"><input id="auto-shards" type="checkbox" checked><span>通道自动带水晶</span></label>
+          <label class="width-label" for="paint-width"><span>画笔宽度</span><select id="paint-width"><option value="1">1 格</option></select></label>
+        </div>
+        <div class="protected-note"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="8" width="12" height="9" rx="1"/><path d="M6.5 8V5a3.5 3.5 0 0 1 7 0v3M10 11v3"/></svg><p><strong>安全屋结构锁定</strong><span>出生点可在屋内移动</span></p></div>
+        <div class="source-actions" role="group" aria-label="切换地图底图">
+          <label for="map-preset">旧图预设</label>
+          <select id="map-preset"><option value="previous">上一版地图</option><option value="original">同学原图</option></select>
+          <button id="load-original" type="button" title="载入所选旧图前检查草稿和安全屋结构">载入旧图<span aria-hidden="true">↗</span></button>
+          <button id="reset-map" type="button" title="还原内置地图与编辑器显示设置，可撤销">还原默认地图<span aria-hidden="true">↺</span></button>
+        </div>
+      </aside>
+
+      <section class="canvas-workspace" aria-label="地图编辑区">
+        <div class="canvas-toolbar">
+          <div class="canvas-label"><span class="draft-dot" aria-hidden="true"></span>编辑平面图</div>
+          <div class="display-options" role="group" aria-label="画布显示">
+            <label class="check-label"><input id="show-grid" type="checkbox" checked><span>网格</span></label>
+            <label class="check-label"><input id="show-shards" type="checkbox" checked><span>水晶</span></label>
+            <label class="check-label turns-toggle"><input id="show-turns" type="checkbox" checked><span>高亮折弯</span></label>
+          </div>
+        </div>
+        <div id="map-viewport" class="map-viewport">
+          <canvas id="map-canvas" tabindex="0" aria-label="可编辑的旅馆地图画布" aria-describedby="tool-help canvas-keyboard-help">请启用 JavaScript 以编辑地图。</canvas>
+        </div>
+        <div class="canvas-command">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 9v5m0-9v1"/></svg>
+          <p id="tool-help">选择格子查看坐标；用直线工具拖出一段通道。</p>
+        </div>
+      </section>
+
+      <aside class="inspector" aria-label="地图统计与检查">
+        <section class="selection-panel" aria-labelledby="selection-title">
+          <div class="section-heading"><h2 id="selection-title">当前选格</h2><span class="coordinate-unit">X / Z</span></div>
+          <output id="cell-info" class="cell-info">X — · Z —</output>
+          <p id="selection-hint" class="section-note">点击地图，查看格子与通路。</p>
+        </section>
+
+        <section class="stats-panel" aria-labelledby="stats-title">
+          <div class="section-heading"><h2 id="stats-title">布局统计</h2><span>实时</span></div>
+          <dl id="map-stats" class="map-stats">
+            <div><dt>水晶</dt><dd id="stat-shards">—</dd></div>
+            <div><dt>可走格</dt><dd id="stat-cells">—</dd></div>
+            <div><dt>度 2 转角</dt><dd id="stat-corners">—</dd></div>
+            <div><dt>独立环路</dt><dd id="stat-cycles">—</dd></div>
+          </dl>
+        </section>
+
+        <section class="turns-panel" aria-labelledby="turns-title">
+          <div class="section-heading"><h2 id="turns-title"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17v-6h7V4h7"/><circle cx="3" cy="17" r="1"/><circle cx="17" cy="4" r="1"/></svg>短折弯检查</h2><span id="turn-count" class="issue-count" aria-label="短折弯数量">—</span></div>
+          <p class="section-note">点选条目定位，检查接连转向的路段。</p>
+          <ol id="turn-list" class="turn-list"><li class="empty-list">地图载入后检查短折弯。</li></ol>
+        </section>
+
+        <section class="validation-panel" aria-labelledby="validation-title">
+          <div class="section-heading"><h2 id="validation-title">试玩前检查</h2></div>
+          <ul id="validation-list" class="validation-list" aria-live="polite"><li class="check-pending">正在检查连通性与角色位置…</li></ul>
+        </section>
+        <div class="map-key" aria-label="地图图例">
+          <span><i class="key-path"></i>通道</span><span><i class="key-wall"></i>墙体</span><span><i class="key-barrier"></i>隔墙</span><span><i class="key-room"></i>安全屋</span><span><i class="key-turn"></i>短折弯</span>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="editor-statusbar">
+      <output id="status-message" class="status-message" aria-live="polite">正在准备工作台…</output>
+      <p id="canvas-keyboard-help" class="keyboard-help">滚轮缩放<span> · 中键 / <kbd>H</kbd> 拖图 · <kbd>Ctrl Z</kbd> 撤销 · <kbd>Ctrl Shift Z</kbd> 重做</span></p>
+      <div class="zoom-controls" role="group" aria-label="画布缩放">
+        <button id="zoom-out" type="button" aria-label="缩小画布" title="缩小">−</button>
+        <button id="zoom-fit" type="button" title="适应画布，显示完整地图"><output id="zoom-value">100%</output></button>
+        <button id="zoom-in" type="button" aria-label="放大画布" title="放大">＋</button>
+      </div>
+    </footer>
+  </div>
+  <noscript><p class="no-script">地图编辑器需要 JavaScript；请启用后重新打开。</p></noscript>
+  <script type="module" src="./src/map-editor.js"></script>
+</body>
+</html>

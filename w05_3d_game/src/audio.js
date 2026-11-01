@@ -38,8 +38,9 @@ export class Sound {
     source.connect(filter).connect(gain).connect(stereo).connect(bus);source.start(now);this.track(source,[filter,gain,stereo],now+duration+.03);
   }
   step(volume,pan,enemy=false){
-    this.noiseBurst(volume,pan,enemy?.19:.10,enemy?1250:650);
-    this.tone(enemy?108:140,enemy?.17:.09,'sine',volume*.7,0,pan,this.threat,enemy?44:85);
+    const bus=enemy?this.threat:this.effects;
+    this.noiseBurst(volume,pan,enemy?.19:.10,enemy?1250:650,bus);
+    this.tone(enemy?108:140,enemy?.17:.09,'sine',volume*.7,0,pan,bus,enemy?44:85);
     if(enemy)this.noiseBurst(volume*.65,pan,.055,2300,this.threat,.025,900);
   }
   heartbeat(volume){
@@ -65,14 +66,19 @@ export class Sound {
     if(name==='won')[330,440,554,660].forEach((f,i)=>this.tone(f,.6,'sine',.12,i*.16));
     if(name==='hit'){this.growl(.62,0,true);this.tone(120,.45,'triangle',.35,0,0,this.effects,33);}
     if(name==='tablet')this.noiseBurst(.1,0,.18,900,this.effects,0,350);
+    if(name==='boards-break'){
+      this.music?.reset();this.tone(170,.22,'triangle',.22,0,0,this.effects,55);
+      for(const [delay,pan,volume] of [[0,-.2,.42],[.07,.3,.3],[.18,-.1,.18]])this.noiseBurst(volume,pan,.16,2100,this.effects,delay,700);
+      this.tone(76,.3,'sine',.13,.06,0,this.effects,34);
+    }
     if(name==='start'||name==='respawn'){this.stride=0;this.enemyStride=0;this.heartClock=0;this.voiceClock=1.4;this.tone(220,.25,'sine',.07);}
   }
   update(dt,speed,d,pan,occluded,escape,enemySpeed=0,playerSteps=0){
+    // Camera foot plants and audible footfalls share a single distance clock.
+    for(let i=0;i<playerSteps;i++){this.foot++;this.step(.105,(this.foot%2?1:-1)*.15);}
     if(!this.playing)return;
     this.music?.update(dt,d,occluded,escape);
     const mix=proximityMix(d,occluded);
-    // Camera foot plants and audible footfalls share a single distance clock.
-    for(let i=0;i<playerSteps;i++){this.foot++;this.step(.105,(this.foot%2?1:-1)*.15);}
     if(enemySpeed>.02){this.enemyStride+=enemySpeed*2.4*dt;if(this.enemyStride>=1.65){this.enemyStride%=1.65;if(mix.footGain>.01)this.step(mix.footGain,pan,true);}}
     this.heartClock-=dt;if(mix.heartGain>.001&&this.heartClock<=0){this.heartbeat(mix.heartGain);this.heartClock=mix.heartInterval;}
     this.voiceClock-=dt;if(mix.voiceGain>.025&&enemySpeed>.02&&this.voiceClock<=0){this.growl(mix.voiceGain,pan);this.voiceClock=escape?3.8:4.6+Math.random()*1.6;}

@@ -83,6 +83,23 @@
           "height": 1024
         }
       ]
+    },
+    {
+      "id": "Leather037",
+      "page": "https://ambientcg.com/a/Leather037",
+      "download": "https://ambientcg.com/get?file=Leather037_1K-JPG.zip",
+      "files": [
+        {
+          "name": "Leather037_1K-JPG_NormalGL.jpg",
+          "bytes": 1820470,
+          "sha256": "b0684254670e067d88fa89d04b1dabb832e4652246c7e3878604c713eecd50f7"
+        },
+        {
+          "name": "Leather037_1K-JPG_Roughness.jpg",
+          "bytes": 728299,
+          "sha256": "b67300743ff88fe4aafd0d303997d9acaa7f2f730262a3079814d5b673721e46"
+        }
+      ]
     }
   ]
 }

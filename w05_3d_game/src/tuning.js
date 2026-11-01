@@ -1,6 +1,7 @@
 // Source-controlled defaults. UI changes live only in the current page.
 export const TUNING_GROUPS = [
   {title:'画面与空间',fields:[
+    {key:'contactShadows',label:'接触阴影',value:.85,min:0,max:1,step:.05,unit:'%'},
     {key:'fov',label:'视野',value:86,min:60,max:110,step:1,unit:'°'},
     {key:'brightness',label:'场景亮度',value:.7,min:.3,max:1.3,step:.05,unit:'%'},
     {key:'corridorWidth',label:'通道净宽',value:1.5,min:1.3,max:2.4,step:.1,unit:'米'},

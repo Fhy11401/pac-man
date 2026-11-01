@@ -1,3 +1,4 @@
+import {mazeGame} from './helpers/game-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PlayerMotion} from '../src/player-motion.js';
@@ -7,6 +8,7 @@ import {createGame,tick,blocked} from '../src/core.js';
 import {steerVelocity} from '../src/movement.js';
 import {Sound} from '../src/audio.js';
 import {angularTurnRate} from '../src/presentation.js';
+import {straightCorridor,rightAngle,heading,projection} from './helpers/map-fixtures.js';
 
 test('Equal mouse distance gives equal turn at different speeds and polling rates by default',()=>{
   const turns=[];
@@ -28,34 +30,34 @@ test('Look steering preserves speed, including a 180-degree turn and angle wrap'
 
 test('Holding forward while turning follows the view without a one-frame sideways slide',()=>{
   for(const fps of [30,60,144]){
-    const g=createGame();g.player={x:4,z:2};g.enemyDelay=999;
-    g.moveHeading=-Math.PI/2;g.motionVelocity={x:2.8,z:0};
-    const start={...g.player};tick(g,{x:0,z:1,heading:-Math.PI,run:true},1/fps);
-    assert.ok(Math.abs(g.player.x-start.x)<1e-9);
-    assert.ok(Math.abs(g.player.z-start.z-2.8/fps)<1e-9);assert.equal(blocked(g.player),false);
+    const turn=rightAngle(),g=mazeGame();g.player={...turn.corner};g.enemyDelay=999;
+    g.moveHeading=heading(turn.incoming);g.motionVelocity=turn.vector(2.8,0);
+    const start={...g.player};tick(g,{...turn.outgoing,heading:heading(turn.outgoing),run:true},1/fps);
+    assert.ok(Math.abs(projection(g.player,start,turn.incoming))<1e-9);
+    assert.ok(Math.abs(projection(g.player,start,turn.outgoing)-2.8/fps)<1e-9);assert.equal(blocked(g.player),false);
   }
 });
 
 test('Turning while coasting does not redirect released momentum; A/D still brakes',()=>{
-  const g=createGame();g.player={x:4,z:2};g.enemyDelay=999;g.moveHeading=-Math.PI/2;g.motionVelocity={x:2.8,z:0};
+  const hall=straightCorridor(),g=mazeGame();g.player=hall.at(0);g.enemyDelay=999;g.moveHeading=-Math.PI/2;g.motionVelocity={x:2.8,z:0};
   tick(g,{x:0,z:0,heading:0},1/144);
-  assert.ok(g.player.x>4);assert.equal(g.player.z,2);
+  assert.ok(g.player.x>hall.origin.x);assert.equal(g.player.z,hall.origin.z);
   const v=g.motionVelocity.x;tick(g,{x:-1,z:0,heading:0,run:true},1/144);
   assert.ok(g.motionVelocity.x<v&&g.motionVelocity.x>0);
 });
 
 test('A mouse-like quarter turn at running speed clears a narrow corner at 30/60/144 Hz',()=>{
   for(const fps of [30,60,144]){
-    const g=createGame();g.player={x:2.6,z:5};g.enemyDelay=999;
-    g.moveHeading=-Math.PI/2;g.motionVelocity={x:tuning.sprintSpeed,z:0};
+    const turn=rightAngle(),g=mazeGame();g.player=turn.at(-.4,0);g.enemyDelay=999;
+    g.moveHeading=heading(turn.incoming);g.motionVelocity=turn.vector(tuning.sprintSpeed,0);
     const duration=.4*Math.PI/2/tuning.sprintSpeed;let elapsed=0;
     while(elapsed<duration-1e-9){
-      const dt=Math.min(1/fps,duration-elapsed),heading=-Math.PI/2-(elapsed+dt/2)/duration*Math.PI/2;
-      tick(g,{x:-Math.sin(heading),z:-Math.cos(heading),heading,run:true},dt);
+      const dt=Math.min(1/fps,duration-elapsed),angle=(elapsed+dt/2)/duration*Math.PI/2,direction=turn.vector(Math.cos(angle),Math.sin(angle));
+      tick(g,{...direction,heading:heading(direction),run:true},dt);
       assert.equal(blocked(g.player),false);elapsed+=dt;
     }
-    for(let i=0;i<fps/4;i++)tick(g,{x:0,z:1,heading:-Math.PI,run:true},1/fps);
-    assert.ok(Math.abs(g.player.x-3)<.02);assert.ok(g.player.z>6);assert.equal(blocked(g.player),false);
+    for(let i=0;i<fps/4;i++)tick(g,{...turn.outgoing,heading:heading(turn.outgoing),run:true},1/fps);
+    assert.ok(Math.abs(projection(g.player,turn.corner,turn.incoming))<.02);assert.ok(projection(g.player,turn.corner,turn.outgoing)>1);assert.equal(blocked(g.player),false);
   }
 });
 
