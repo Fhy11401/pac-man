@@ -105,7 +105,7 @@ export class WorldView {
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;
-    this.security?.dispose();
+    this.blackoutView?.controlRoom?.dispose();this.security?.dispose();
     this.menuView?.dispose();
     this.enemyXray?.dispose();
     this.loadingListeners.clear();
@@ -297,6 +297,7 @@ export class WorldView {
     updateEnemyWarning(this.warningLight,this.warningShadowPose,{x:this.enemy.position.x,z:this.enemy.position.z,heading:this.enemyHeading,enabled:warning,friendly,doorProgress:game.blackout?.doorProgress??game.entryBreakTime??0,roomDoors:game.blackout?.roomDoors});
     if(!game.blackout){SHARDS.forEach((p,i)=>{if(this.shardFade[i]===0)return;const fade=this.shardFade[i]=Math.max(0,this.shardFade[i]-(game.collected.has(i)?dt*6:0));const dummy=this.dummy;dummy.position.copy(world(p.x,p.z,.87+Math.sin(time*2+i)*.035+(1-fade)*.2));dummy.rotation.set(0,time*.9+i*.4,0);dummy.scale.setScalar(fade);dummy.updateMatrix();this.shardMesh.setMatrixAt(i,dummy.matrix);dummy.quaternion.copy(this.camera.quaternion);dummy.updateMatrix();this.shardGlow.setMatrixAt(i,dummy.matrix);});this.shardMesh.instanceMatrix.needsUpdate=true;this.shardGlow.instanceMatrix.needsUpdate=true;}
     const unlocked=game.collected.size===SHARDS.length;this.exitMaterial.color.setHex(unlocked?0x74f2b8:0x9470c2);this.exitMaterial.opacity=unlocked?.27+Math.sin(time*3)*.05:.08;this.exitRing.material.color.setHex(unlocked?0x9bffcc:0x5a3d72);this.exitRing.rotation.z=time*(unlocked?.6:.06);
+    if(active)this.blackoutView.controlRoom?.updateFeeds(game,dt);
     const renderCamera=this.security.active?this.security.camera:this.camera;
     this.updateLampPool(game,dt,renderCamera,this.security.active?this.security.selected.id:null);
     this.lights.forEach((light,i)=>{const dummy=this.dummy;dummy.position.copy(light.position);dummy.position.y+=.08;dummy.quaternion.copy(renderCamera.quaternion);dummy.scale.setScalar(light.visible&&light.intensity>6?.72:0);dummy.updateMatrix();this.lampHalos.setMatrixAt(i,dummy.matrix);});this.lampHalos.instanceMatrix.needsUpdate=true;

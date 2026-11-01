@@ -21,7 +21,7 @@ const drain=()=>new Promise(resolve=>setImmediate(resolve));
 
 test('the call starts connected in an explicit captions mode and never requests legacy recordings',()=>{
   const {call,audio,nodes,events}=fixture();call.startConnected();call.update(1);
-  assert.equal(call.state,'connected');assert.equal(nodes['tutorial-call'].dataset.state,'connected');assert.equal(nodes['call-media-state'].textContent,'字幕');
+  assert.equal(call.state,'connected');assert.equal(nodes['tutorial-call'].dataset.state,'connected');assert.equal(call.audioMode,'captions');
   assert.equal(nodes['call-duration'].textContent,'00:01');assert.equal(events.open,1);assert.equal(events.ring,0);assert.equal(audio.playCalls.length,0);assert.equal(audio.src,'');assert.equal(nodes['call-speaker'].disabled,true);
   assert.equal(nodes['call-caption'].textContent,TUTORIAL_LINES[0].sentences[0].text);call.close();assert.equal(events.close,1);
 });
@@ -36,16 +36,16 @@ test('the short transcript advances one Chinese caption at a time in fallback mo
 });
 
 test('next skips exactly one sentence and hanging up prevents every later caption',()=>{
-  const {call,nodes,events}=fixture();call.startConnected();nodes['call-next'].onclick();assert.equal(call.index,0);assert.equal(call.sentenceIndex,1);
+  const {call,nodes,events}=fixture();call.startConnected();call.next();assert.equal(call.index,0);assert.equal(call.sentenceIndex,1);
   assert.equal(nodes['call-caption'].textContent,TUTORIAL_LINES[0].sentences[1].text);const text=nodes['call-caption'].textContent;
   nodes['call-hangup'].onclick();call.update(100);call.next();assert.equal(nodes['call-caption'].textContent,text);assert.equal(events.close,1);assert.equal(nodes.tablet.dataset.call,'false');
 });
 
 test('game pause freezes the call timer and captions; hold freezes captions while remaining connected',()=>{
   const {call,nodes}=fixture();call.startConnected();call.update(1);const remaining=call.advance;
-  call.setActive(false);call.update(90);assert.equal(call.elapsed,1);assert.equal(call.advance,remaining);assert(nodes['tutorial-call'].hidden);assert(nodes['tutorial-call'].inert);
+  call.setActive(false);call.update(90);assert.equal(call.elapsed,1);assert.equal(call.advance,remaining);assert(nodes['tutorial-call'].hidden);assert(nodes['tutorial-call'].inert);assert(nodes['call-caption'].hidden);
   call.setActive(true);assert.equal(nodes['tutorial-call'].hidden,false);nodes['call-hold'].onclick();call.update(12);
-  assert.equal(call.advance,remaining);assert.equal(call.elapsed,13);assert.equal(nodes['call-hold-label'].textContent,'继续');assert.equal(nodes['call-media-state'].textContent,'已暂停');
+  assert.equal(call.advance,remaining);assert.equal(call.elapsed,13);assert.equal(nodes['call-hold-label'].textContent,'继续');assert.equal(nodes['call-hold'].attributes['aria-pressed'],'true');assert.equal(nodes['call-caption'].hidden,false);
   nodes['call-hold'].onclick();call.update(remaining+.01);assert.equal(call.sentenceIndex,1);
 });
 
@@ -57,7 +57,7 @@ test('narration requires explicit approval, English metadata, and a complete non
 });
 
 test('approved English audio follows sentence cues, supports seeking, and ends each configured clip',()=>{
-  const {call,audio,nodes,events}=fixture({audioConfig:approvedAudio()});call.startConnected();assert.equal(nodes['call-media-state'].textContent,'英语 · 中文字幕');
+  const {call,audio,nodes,events}=fixture({audioConfig:approvedAudio()});call.startConnected();assert.equal(call.audioMode,'voice');
   audio.currentTime=6.1;call.update(.01);assert.equal(call.sentenceIndex,1);assert.equal(nodes['call-caption'].textContent,TUTORIAL_LINES[0].sentences[1].text);
   call.next();assert.equal(audio.currentTime,12);assert.equal(call.sentenceIndex,2);
   for(let index=0;index<TUTORIAL_LINES.length;index++){assert.equal(call.index,index);assert(audio.src.endsWith(`lesson-${index+1}.ogg`));audio.onended();call.update(.71);}
@@ -78,7 +78,7 @@ test('restarting invalidates previous playback rejection, end, and error callbac
 
 test('a failed approved recording falls back truthfully to paused, readable sentence captions',async()=>{
   const {call,audio,nodes}=fixture({audioConfig:approvedAudio(),play:Promise.reject(new Error('not supported'))});call.startConnected();await drain();
-  assert.equal(call.audioMode,'captions');assert.equal(nodes['call-media-state'].textContent,'字幕');assert.equal(nodes['call-speaker'].disabled,true);assert(audio.paused);const wait=call.advance;
+  assert.equal(call.audioMode,'captions');assert.equal(call.audioMode,'captions');assert.equal(nodes['call-speaker'].disabled,true);assert(audio.paused);const wait=call.advance;
   call.setActive(false);call.update(wait+1);assert.equal(call.sentenceIndex,0);call.setActive(true);call.update(wait+.01);assert.equal(call.sentenceIndex,1);assert.equal(audio.playCalls.length,1);
 });
 
@@ -91,9 +91,9 @@ test('only approved audio creates shared filters, follows mute, and disposes onc
   call.stop();call.startConnected();assert.equal(created.length,3);call.destroy();call.destroy();assert(created.every(node=>node.disconnections===1));assert.equal(nodes['call-hangup'].onclick,null);assert.equal(nodes['call-hold'].onclick,null);assert.equal(audio.onended,null);
 });
 
-test('connected-call controls all exist and the phone has no incoming-call choices',()=>{
+test('incoming and connected controls exist without adding night vision to the phone',()=>{
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),ids=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]));
-  const {nodes}=fixture();for(const id of Object.keys(nodes))assert(ids.has(id),`missing ${id}`);assert(!ids.has('call-answer'));assert(!ids.has('call-decline'));assert(!ids.has('phone-nightvision'));
+  const {nodes}=fixture();for(const id of Object.keys(nodes))assert(ids.has(id),`missing ${id}`);assert(ids.has('call-answer'));assert(ids.has('call-decline'));assert(!ids.has('phone-nightvision'));
 });
 
 test('the default recording is the supplied complete MP3 with a single 54-second timeline',()=>{
@@ -101,7 +101,7 @@ test('the default recording is the supplied complete MP3 with a single 54-second
   assert.equal(call.audioMode,'voice');assert.equal(TUTORIAL_AUDIO_CONFIG.clips.length,1);
   assert.equal(TUTORIAL_AUDIO_CONFIG.clips[0].duration,54.06);assert.equal(TUTORIAL_LINES.length,1);
   assert.equal(audio.playbackRate,1);assert.equal(audio.defaultPlaybackRate,1);
-  assert.equal(nodes['call-media-state'].textContent,'英语 · 中文字幕');
+  assert.equal(call.audioMode,'voice');
   const file=readFileSync(new URL('../assets/audio/tutorial/night-manager-en.mp3',import.meta.url));
   assert.equal(file.length,595952);
   assert.equal(createHash('sha256').update(file).digest('hex'),'923c3acd6da5669cf9b26a61f15b604274cc90f4c9572e6ef6d8374f5aa22e54');
@@ -128,7 +128,7 @@ test('recorded caption boundaries and manual next seek the same file without res
 test('a retained recording may seek while held but cannot resume until hold and game pause are released',()=>{
   const {call,audio,nodes}=fixture({useDefault:true});call.startConnected();audio.currentTime=26.3;call.update(.01);
   nodes['call-hold'].onclick();assert(audio.paused);const playCalls=audio.playCalls.length;
-  nodes['call-next'].onclick();assert.equal(audio.currentTime,32.888085);assert.equal(audio.playCalls.length,playCalls);
+  call.next();assert.equal(audio.currentTime,32.888085);assert.equal(audio.playCalls.length,playCalls);
   call.setActive(false);call.update(30);assert(audio.paused);assert.equal(call.sentenceIndex,9);
   call.setActive(true);assert(audio.paused,'game resume must respect an explicitly held call');
   nodes['call-hold'].onclick();assert.equal(audio.paused,false);assert.equal(audio.currentTime,32.888085);
@@ -140,4 +140,13 @@ test('a mid-recording load error keeps the current short caption and finishes wi
   const caption=nodes['call-caption'].textContent;assert.equal(call.sentenceIndex,11);audio.onerror();
   assert.equal(call.audioMode,'captions');assert.equal(nodes['call-caption'].textContent,caption);assert(audio.paused);
   call.update(100);assert.equal(events.close,1);assert.equal(audio.sourceWrites.filter(Boolean).length,1);
+});
+
+test('incoming calls ring without narration, pause cleanly, and require an answer',()=>{
+ const {call,nodes,events,audio}=fixture();call.startIncoming();assert(call.ringing);assert(!call.open);assert.equal(events.ring,1);assert.equal(events.open,0);assert(nodes['call-caption'].hidden);assert.equal(audio.playCalls.length,0);
+ call.setActive(false);call.update(15);assert.equal(events.ring,1);call.setActive(true);call.update(3.1);assert.equal(events.ring,2);nodes['call-answer'].onclick();assert(call.open);assert.equal(events.open,1);assert.equal(nodes['call-caption'].hidden,false);
+});
+test('declining or ignoring a call never starts the tutorial and releases the phone',()=>{
+ const {call,nodes,events}=fixture();call.startIncoming();nodes['call-decline'].onclick();assert(!call.busy);assert.equal(events.open,0);assert.equal(events.close,1);call.update(60);assert.equal(events.close,1);
+ call.startIncoming();call.update(30);assert(!call.busy);assert.equal(events.open,0);assert.equal(events.close,2);call.stop();call.update(60);assert.equal(events.close,2);
 });

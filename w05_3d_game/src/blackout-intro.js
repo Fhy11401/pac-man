@@ -1,8 +1,9 @@
 // A short visual sequence; the actual hotel power objective stays unrepaired.
 export const INTRO_STAGES=Object.freeze([
-  {mode:'mains',duration:1.35,event:null},
-  {mode:'blackout',duration:.95,event:'mains-fail'},
-  {mode:'backup',duration:1.25,event:'backup-start'},
+  {mode:'mains',duration:2.8,event:null},
+  {mode:'blackout',duration:3,event:'mains-fail'},
+  {mode:'blackout',duration:3.2,event:'backup-start'},
+  {mode:'backup',duration:3,event:'backup-ready'},
 ]);
 export class BlackoutIntro{
   constructor({onEvent=()=>{},onComplete=()=>{}}={}){this.onEvent=onEvent;this.onComplete=onComplete;this.active=false;this.game=null;}

@@ -1,6 +1,7 @@
 import {createGame,tick,getBlackoutInteraction,blackoutSight} from './core.js';
 import {BLACKOUT_RULES,BLACKOUT_LAYOUT} from './blackout-layout.js';
 import {BlackoutUI} from './blackout-ui.js';
+import {BlackoutIntro} from './blackout-intro.js';
 import {TutorialCall} from './tutorial-call.js';
 import {DoorInput} from './door-input.js';
 import {SHARDS,RULES,START_YAW,IS_MAP_DRAFT,IS_HOTEL_DRAFT,HOTEL_DOCUMENT,MAP_DRAFT_ERROR,MAP_DOCUMENT,isInSafeRoom,distance} from './world.js';
@@ -19,7 +20,7 @@ let bedLook=null;
 const doorInput=new DoorInput();
 const $=id=>document.getElementById(id),sound=new Sound(),reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Defaults change only through source edits; all UI adjustments are page-local.
-const DEFAULT_SETTINGS=Object.freeze({...DEFAULT_TUNING,corridorWidth:BLACKOUT_RULES.corridorWidth,motion:!reduced,autorun:false,zoom:true,music:.65,friendlyMode:false,enemyXray:true});
+const DEFAULT_SETTINGS=Object.freeze({...DEFAULT_TUNING,corridorWidth:BLACKOUT_RULES.corridorWidth,motion:!reduced,autorun:false,zoom:true,music:.325,friendlyMode:true,enemyXray:false});
 let settings={...DEFAULT_SETTINGS};
 for(const group of TUNING_GROUPS){
  const section=group.id?$(group.id):document.createElement('fieldset');
@@ -40,9 +41,11 @@ const blackoutUI=new BlackoutUI({onAction(action){
   if(command)pendingActions.push(command);
 }});
 const tutorialCall=new TutorialCall({sound,onRing:()=>sound.event('call-ring'),
-  onOpen(){game.blackout.phoneOpen=true;clearKeys();quickTurn.cancel();releasePointer();updateHUD();},
-  onClose(){if(game.blackout)game.blackout.phoneOpen=false;clearKeys();updateHUD();if(screen==='playing'&&game.phase==='playing')requestPointer();},
+  onIncoming(){game.blackout.phoneOpen=true;clearKeys();releasePointer();updateHUD();},
+  onOpen(){sound.unlock();sound.event('call-connect');game.blackout.phoneOpen=true;clearKeys();quickTurn.cancel();releasePointer();updateHUD();},
+  onClose(){sound.event('call-end');if(game.blackout)game.blackout.phoneOpen=false;clearKeys();updateHUD();if(screen==='playing'&&game.phase==='playing')requestPointer();},
 });
+const intro=new BlackoutIntro({onEvent:event=>sound.event(event),onComplete:current=>{if(current===game&&screen==='playing')tutorialCall.startIncoming();}});
 let renderDirty=true,sceneReady=false,loadingActive=true,noticeAcknowledged=false,loadingSequence=0,progressUnsubscribe=null,loadingReturn=null;
 const loadingKeys=new Set(),loadingOverlay=$('asset-loading');
 const startLabel=$('start-button').innerHTML,startControls=['start-button','demo-restart','restart-pause','restart-result'];
@@ -67,7 +70,7 @@ let lastFrame=performance.now(),sceneTime=0,uiTimer=0,toastUntil=0,resultDelay=0
 const time=v=>`${String(Math.floor(v/60)).padStart(2,'0')}:${String(Math.floor(v%60)).padStart(2,'0')}`,hide=(id,v)=>$(id).hidden=v;
 function clearKeys(){keys.clear();pendingInteract=false;pendingActions=[];doorInput.clear();doorPointerId=null;}
 function doorGesture(action){if(action)pendingActions.push(action);}
-function phoneBusy(){const b=game.blackout;return Boolean(b&&(b.phoneOpen||b.monitor||b.monitorConnecting>0));}
+function phoneBusy(){const b=game.blackout;return intro.active||Boolean(b&&(b.phoneOpen||b.monitor||b.monitorConnecting>0));}
 function protectedRoom(){return game.blackout?isInSafeRoom(game.player)&&game.blackout.doorProgress>=.999&&!isInSafeRoom(game.enemy):!game.entryOpened||isInSafeRoom(game.player);}
 function announce(s,ms=2600){$('toast').textContent=s;toastUntil=performance.now()+ms;$('toast').classList.add('show');}
 function releasePointer(){mouseResistance.reset();mouseLook.setLocked(false);hadPointerLock=false;if(document.pointerLockElement)document.exitPointerLock();}
@@ -90,7 +93,7 @@ function updateScreen(){
   for(const id of ['content-notice','menu','hud','pause-panel','developer-panel','result','error-panel','map-editor-return'])$(id).inert=loadingActive||$(id).hidden;
   $('menu').inert=loadingActive||['settings','developer'].includes(screen)||$('menu').hidden;$('hud').inert=loadingActive||screen!=='playing';
   const inSettings=screen==='settings';$('pause-title').textContent=inSettings?'夜班设置':'已暂停';$('resume-button').innerHTML=inSettings?'返回主菜单 <span>›</span>':'继续探索 <span>›</span>';hide('restart-pause',inSettings);hide('menu-pause',inSettings);
-  sound.setPlaying(!loadingActive&&screen==='playing'&&game.phase==='playing'&&(game.blackout||game.entryOpened)&&!protectedRoom());sound.setPaused(loadingActive||screen!=='playing');
+  sound.setPlaying(!loadingActive&&screen==='playing'&&game.phase==='playing'&&(game.blackout||game.entryOpened)&&(!protectedRoom()||game.blackout?.enemyMode==='chase'));sound.setPaused(loadingActive||screen!=='playing');
   blackoutUI.update(game,{interaction:getBlackoutInteraction(game,yaw),active:!loadingActive&&screen==='playing'&&game.phase==='playing',heading:yaw});
   tutorialCall.setActive(!loadingActive&&screen==='playing'&&game.phase==='playing');
   view?.setSecurityMonitor(!loadingActive&&screen==='playing'&&game.phase==='playing'&&Boolean(game.blackout?.monitor),blackoutUI.channel,$('monitor-feed'));
@@ -102,12 +105,12 @@ function start(nextMode='human'){
   if(loadingActive||!sceneReady||!noticeAcknowledged)return;
   quickTurn.cancel();
   rebuildCorridors();if(!sceneReady)return;mode=nextMode;game=makeGame(nextMode);bot=new DemoController();yaw=START_YAW;pitch=0;clearKeys();mouseLook.cancelDrag();mouseResistance.reset();demoClock=0;resultDelay=0;screen='playing';scareLook=null;sound.unlock();sound.setPaused(false);sound.event('start');$('toast').classList.remove('show');updateScreen();updateHUD();if(mode==='human'&&!game.blackout)requestPointer();else releasePointer();lastFrame=performance.now();
-  tutorialCall.stop();
-  if(mode==='human'&&game.blackout)tutorialCall.startConnected();
+  sound.opening?.stop();intro.stop();tutorialCall.stop();
+  if(mode==='human'&&game.blackout){intro.start(game);updateHUD();}
   else if(mode==='human')announce('地图草稿巡检：WASD 移动，E 拆开木板。草稿沿用收集规则。',5000);
 }
 function menu(message=(IS_MAP_DRAFT?`草稿试玩 · ${MAP_DOCUMENT.name} · `:'')+'电脑键盘与鼠标游玩 · 建议佩戴耳机'){
-  tutorialCall.stop();
+  sound.opening?.stop();intro.stop();tutorialCall.stop();
   quickTurn.cancel();
   screen='menu';clearKeys();mouseLook.cancelDrag();mouseResistance.reset();releasePointer();game=makeGame();yaw=START_YAW;pitch=0;mode='human';$('menu-note').textContent=message;$('toast').classList.remove('show');$('danger-glow').style.opacity=0;$('pickup-glow').style.opacity=0;document.body.classList.remove('escape');updateScreen();
 }
@@ -222,7 +225,7 @@ function applySettings(){
   $('zoom-setting').checked=settings.zoom;
   $('friendly-setting').checked=settings.friendlyMode;$('notice-friendly-setting').checked=settings.friendlyMode;
   $('enemyXray-setting').checked=settings.enemyXray;
-  sound.setMusicVolume(settings.music);$('music-setting').value=settings.music;$('music-value').textContent=`${Math.round(settings.music*100)}%`;
+  sound.setMusicVolume(settings.music);$('music-setting').value=settings.music;$('music-value').textContent=`${Number((settings.music*100).toFixed(1))}%`;
   if(view){view.horizontalFov=settings.fov;view.renderer.toneMappingExposure=.96*settings.brightness;view.motionTuning={...settings};view.motionEnabled=settings.motion;view.eyeHeight=settings.eyeHeight;}
   for(const field of TUNING_FIELDS){$(field.key+'-setting').value=settings[field.key];$(field.key+'-value').textContent=formatTuning(field,settings[field.key]);}
   for(const key of MOVEMENT_KEYS)game.tuning[key]=settings[key];
@@ -235,17 +238,17 @@ function frame(now){
     const input=game.phase==='playing'?(mode==='demo'?bot.input(game,dt):manualInput(dt)):{x:0,z:0};
     if(mode==='demo'&&game.phase==='playing'){yaw=bot.yaw;pitch=0;}
     const wasMonitoring=Boolean(game.blackout?.monitor),wasPhoneBusy=phoneBusy();
-    const events=tick(game,input,dt);for(const event of events){sound.event(event,game.collected.size);if(event==='collect')pickupUntil=now+130;if(event==='unlock'&&!game.blackout){announce(`记忆已集齐。前往${exitLabel}，离开旅馆。`,4000);}if(event==='hit'){quickTurn.cancel();scareLook=captureScareLook(game.player,game.enemy,yaw,pitch);if(view.camera.position.y<settings.eyeHeight-.2)scareLook.targetPitch=Math.atan2(1.64-view.camera.position.y,Math.max(.1,distance(game.player,game.enemy)*2.4));clearKeys();mouseLook.cancelDrag();mouseResistance.reset();updateScreen();}if(event==='relocate'){yaw=START_YAW;pitch=0;scareLook=null;updateScreen();}if(event==='respawn')updateScreen();if(event==='won'||event==='lost')showResult();}
+    const events=intro.active?[]:tick(game,input,dt);for(const event of events){sound.event(event,game.collected.size);if(event==='collect')pickupUntil=now+130;if(event==='unlock'&&!game.blackout){announce(`记忆已集齐。前往${exitLabel}，离开旅馆。`,4000);}if(event==='hit'){quickTurn.cancel();scareLook=captureScareLook(game.player,game.enemy,yaw,pitch);if(view.camera.position.y<settings.eyeHeight-.2)scareLook.targetPitch=Math.atan2(1.64-view.camera.position.y,Math.max(.1,distance(game.player,game.enemy)*2.4));clearKeys();mouseLook.cancelDrag();mouseResistance.reset();updateScreen();}if(event==='relocate'){yaw=START_YAW;pitch=0;scareLook=null;updateScreen();}if(event==='respawn')updateScreen();if(event==='won'||event==='lost')showResult();}
     updateBedLook();
     if(wasMonitoring!==Boolean(game.blackout?.monitor)||wasPhoneBusy!==phoneBusy()){clearKeys();quickTurn.cancel();mouseLook.cancelDrag();updateHUD();if(phoneBusy())releasePointer();else requestPointer();}
-    if(tutorialCall.open&&game.phase!=='playing')tutorialCall.stop();
-    tutorialCall.update(dt);
+    if(tutorialCall.busy&&game.phase!=='playing')tutorialCall.stop();
+    intro.update(dt);tutorialCall.update(dt);
     if(events.includes('power-on'))announce('酒店供电已恢复。巡夜人现在能在灯下看见你：返回监控室，确认它留在门外，再关门。',6500);
     if(events.includes('door-blocked'))announce('门口有阻挡，请离开门轨再关门。',2200);
     if(events.includes('battery-empty'))announce('夜视电池已耗尽。F 可打开手电，留意沿路备用电池。',3500);
     if(events.includes('battery'))announce('已拾取备用电池。',2000);
     if(events.includes('boards-break'))announce('木板已经破开。找回记忆，留意巡夜人。 The way is open. Collect the memories and watch for the attendant.',3500);
-    sound.setPlaying(screen==='playing'&&game.phase==='playing'&&(game.blackout||game.entryOpened)&&!protectedRoom());
+    sound.setPlaying(screen==='playing'&&game.phase==='playing'&&(game.blackout||game.entryOpened)&&(!protectedRoom()||game.blackout?.enemyMode==='chase'));
     if(mode==='demo'){demoClock+=dt;if(demoClock>DEMO_TIME_LIMIT&&screen==='playing')menu('演示超时，未完成通关。可重播或人工游玩。');}
   }else if(screen==='result'&&mode==='demo'){resultDelay-=dt;$('demo-return').textContent=`${Math.max(0,Math.ceil(resultDelay))} 秒后返回主菜单`;if(resultDelay<=0)menu(game.phase==='won'?'Demo 已成功通关。现在轮到你了。':'Demo 未成功通关，可重播或人工游玩。');}
   if(now>toastUntil)$('toast').classList.remove('show');$('pickup-glow').style.opacity=now<pickupUntil&&screen==='playing'?.75:0;
@@ -261,7 +264,7 @@ function frame(now){
   if(screen==='playing'&&game.phase==='playing'){
     const d=distance(game.player,game.enemy),dx=game.enemy.x-game.player.x,dz=game.enemy.z-game.player.z,pan=Math.max(-1,Math.min(1,(Math.cos(yaw)*dx-Math.sin(yaw)*dz)/Math.max(.1,d)));
     const safe=protectedRoom();
-    sound.update(dt,Math.hypot(game.playerVelocity.x,game.playerVelocity.z),safe?Infinity:d,safe?0:pan,safe||audioOccluded(),game.blackout?game.blackout.powerOn:game.collected.size===SHARDS.length,safe?0:Math.hypot(game.enemyVelocity.x,game.enemyVelocity.z),game.blackout&&!game.sprinting?0:view.playerMotion.steps);
+    sound.update(dt,Math.hypot(game.playerVelocity.x,game.playerVelocity.z),safe?Infinity:d,safe?0:pan,safe||audioOccluded(),game.blackout?game.blackout.powerOn:game.collected.size===SHARDS.length,safe?0:Math.hypot(game.enemyVelocity.x,game.enemyVelocity.z),game.blackout&&!game.sprinting?0:view.playerMotion.steps,game.blackout?.enemyMode==='chase');
     sound.updateBlackout(dt,game,yaw,blackoutSight);
   }
   if(screen==='playing'&&game.phase==='playing')drawMap($('minimap'),game,yaw,settings.zoom,settings.localMapScale);
@@ -286,7 +289,8 @@ $('enemyXray-setting').onchange=e=>{settings.enemyXray=e.target.checked;applySet
 window.addEventListener('keydown',e=>{
   if(e.defaultPrevented)return;
   const code=e.code.toLowerCase();
-  if(screen==='playing'&&tutorialCall.open){if(code==='escape'||code==='tab'){e.preventDefault();if(!e.repeat)tutorialCall.close();}return;}
+  if(screen==='playing'&&intro.active){e.preventDefault();if(code==='escape'&&!e.repeat)pause();return;}
+  if(screen==='playing'&&tutorialCall.busy){if(code==='escape'||code==='tab'){e.preventDefault();if(!e.repeat)tutorialCall.close();}return;}
   if(code==='keym'&&!game.blackout&&!e.repeat&&screen!=='notice'&&screen!=='error')toggleSound();
   if(code==='escape'){if(screen==='playing'&&phoneBusy()){e.preventDefault();if(!e.repeat)pendingActions.push(game.blackout.monitor||game.blackout.monitorConnecting>0?'monitor':'phone');return;}if(mode==='demo'&&screen==='playing')menu('Demo 已退出。你可以开始人工游玩。');else if(screen==='playing')pause();else if(['settings','developer'].includes(screen)){const back=screen==='developer'?'developer-button':'settings-button';menu();$(back).focus();}return;}
   if(code==='tab'&&screen==='playing'&&game.phase==='playing'&&game.blackout){e.preventDefault();if(!e.repeat)pendingActions.push('phone');return;}

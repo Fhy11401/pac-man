@@ -1,4 +1,5 @@
 import {ENTRY_GATE,RULES,CELL_SIZE,distance,gateWall,isInSafeRoom,isOpen,wallInset} from './world.js';
+import {controlRoomLayout} from './control-room-layout.js';
 import {BLACKOUT_LAYOUT} from './blackout-layout.js';
 import {roomCollisionWalls} from './security-room-layout.js';
 import {hallFurnitureWalls} from './hall-layout.js';
@@ -10,7 +11,7 @@ const blackoutWalls=new Map(),furnitureByWidth=new Map();
 export function roomFurnitureWalls(width){
   if(!furnitureByWidth.has(width)){
     if(furnitureByWidth.size>=16)furnitureByWidth.delete(furnitureByWidth.keys().next().value);
-    furnitureByWidth.set(width,Object.freeze([...roomCollisionWalls(width),...hallFurnitureWalls(BLACKOUT_LAYOUT.halls??[],width,CELL_SIZE,isOpen)].map(Object.freeze)));
+    furnitureByWidth.set(width,Object.freeze([...controlRoomLayout(width).walls,...roomCollisionWalls(width),...hallFurnitureWalls(BLACKOUT_LAYOUT.halls??[],width,CELL_SIZE,isOpen)].map(Object.freeze)));
   }
   return furnitureByWidth.get(width);
 }

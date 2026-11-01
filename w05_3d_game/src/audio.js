@@ -1,3 +1,4 @@
+import {OpeningAudio} from './opening-audio.js';
 import {MusicDirector,prepareScore} from './music.js';
 import {BLACKOUT_LAYOUT} from './blackout-layout.js';
 import {ROOM_DOOR_TIMING} from './blackout-state.js';
@@ -9,33 +10,36 @@ export function phoneRingGain(distance,occluded=false){
 }
 export function proximityMix(distance,occluded=false){
   const near=clamp(1-distance/7.5),presence=clamp(1-distance/10);
-  return {heartGain:.38*near*near,heartInterval:60/(62+94*near),footGain:.66*presence**1.35*(occluded?.62:1),voiceGain:.29*near*(occluded?.72:1)};
+  const gain=.66*presence**1.35*(occluded?.62:1);
+  return {heartGain:gain,heartInterval:60/(62+116*presence),footGain:gain,voiceGain:.29*near*(occluded?.72:1)};
 }
 export class Sound {
-  constructor(){this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voiceClock=2;this.voices=new Set();this.score=prepareScore();this.musicVolume=.65;}
+  constructor(){this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voiceClock=2;this.voices=new Set();this.score=prepareScore();this.musicVolume=.325;}
   unlock(){try{if(!this.ctx){
     this.ctx=new(window.AudioContext||window.webkitAudioContext)();
     this.master=this.ctx.createGain();this.master.gain.value=this.muted?0:.8;
     const limiter=this.ctx.createDynamicsCompressor();limiter.threshold.value=-15;limiter.knee.value=14;limiter.ratio.value=5;limiter.attack.value=.003;limiter.release.value=.18;
     this.master.connect(limiter).connect(this.ctx.destination);this.output=limiter;
     this.threat=this.ctx.createGain();this.threat.gain.value=0;this.threat.connect(this.master);
-    this.effects=this.ctx.createGain();this.effects.connect(this.master);
+    this.effects=this.ctx.createGain();this.effects.gain.value=1.2;this.effects.connect(this.master);this.opening=new OpeningAudio(this.ctx,this.effects);
     this.music=new MusicDirector(this.ctx,this.master,this.score);this.music.setVolume(this.musicVolume);this.music.setActive(this.playing&&!this.muted);
     this.noise=this.ctx.createBuffer(1,this.ctx.sampleRate*1.4,this.ctx.sampleRate);
     const n=this.noise.getChannelData(0);let last=0;for(let i=0;i<n.length;i++){last=.75*last+(Math.random()*2-1)*.25;n[i]=last*2;}
     this.ambient=this.ctx.createGain();this.ambient.gain.value=.008;this.ambient.connect(this.threat);
     for(const f of [42,63.18]){const osc=this.ctx.createOscillator();osc.type='sine';osc.frequency.value=f;osc.connect(this.ambient);osc.start();}
   }this.ctx.resume().catch(()=>{});}catch{}}
-  setPlaying(value){if(value===this.playing)return;this.playing=value;this.music?.setActive(value&&!this.muted);if(this.ctx)this.threat.gain.setTargetAtTime(value?1:0,this.ctx.currentTime,.035);if(!value){this.heartClock=0;this.voiceClock=1.5;}}
-  setPaused(value){this.paused=Boolean(value);if(this.ctx)this.effects.gain.setTargetAtTime(value?0:1,this.ctx.currentTime,.015);}
+  setPlaying(value){if(value===this.playing)return;this.playing=value;this.music?.setActive(value&&!this.muted);if(this.ctx)this.threat.gain.setTargetAtTime(value?1.2:0,this.ctx.currentTime,.035);if(!value){this.heartClock=0;this.voiceClock=1.5;}}
+  setPaused(value){this.paused=Boolean(value);this.opening?.setPaused(this.paused);if(this.ctx)this.effects.gain.setTargetAtTime(value?0:1.2,this.ctx.currentTime,.015);}
   toggle(){this.muted=!this.muted;if(this.ctx)this.master.gain.setTargetAtTime(this.muted?0:.8,this.ctx.currentTime,.025);this.music?.setActive(this.playing&&!this.muted);return this.muted;}
   setMusicVolume(value){this.musicVolume=clamp(value);this.music?.setVolume(this.musicVolume);}
   ready(){return this.ctx&&this.ctx.state==='running'&&!this.muted&&!this.paused;}
   track(source,nodes,end){this.voices.add(source);source.onended=()=>{this.voices.delete(source);for(const n of [source,...nodes])n.disconnect();};source.stop(end);}
-  tone(freq,duration=.18,type='sine',volume=.16,delay=0,pan=0,bus=this.effects,endFrequency=freq){
+  tone(freq,duration=.18,type='sine',volume=.16,delay=0,pan=0,bus=this.effects,endFrequency=freq,fullBody=false){
     if(!this.ready())return;const now=this.ctx.currentTime+delay,osc=this.ctx.createOscillator(),gain=this.ctx.createGain(),stereo=this.ctx.createStereoPanner();
     osc.type=type;osc.frequency.setValueAtTime(freq,now);osc.frequency.exponentialRampToValueAtTime(Math.max(20,endFrequency),now+duration);stereo.pan.value=pan;
-    gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(volume,now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+    gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(volume,now+.008);
+    if(fullBody){gain.gain.linearRampToValueAtTime(volume*.85,now+.025);gain.gain.exponentialRampToValueAtTime(Math.max(.0002,volume*.45),now+duration*.58);}
+    gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
     osc.connect(gain).connect(stereo).connect(bus);osc.start(now);this.track(osc,[gain,stereo],now+duration+.02);
   }
   noiseBurst(volume,pan,duration,frequency,bus=this.threat,delay=0,endFrequency=frequency){
@@ -51,10 +55,12 @@ export class Sound {
     if(enemy)this.noiseBurst(volume*.65,pan,.055,2300,this.threat,.025,900);
   }
   heartbeat(volume){
-    for(const [delay,mult] of [[0,1],[.16,.68]]){
-      this.tone(94,.15,'sine',volume*mult,delay,0,this.threat,43);
-      this.tone(174,.09,'triangle',volume*.22*mult,delay,0,this.threat,83);
-      this.noiseBurst(volume*.25,0,.075,150,this.threat,delay,70);
+    // A sustained body and audible upper harmonics retain the pulse on small
+    // speakers; distance attenuation remains shared with enemy footsteps.
+    for(const [delay,mult] of [[0,1],[.15,.8]]){
+      this.tone(118,.23,'sine',volume*1.15*mult,delay,0,this.threat,62,true);
+      this.tone(220,.14,'triangle',volume*.5*mult,delay,0,this.threat,120,true);
+      this.noiseBurst(volume*.3,0,.085,310,this.threat,delay,140);
     }
   }
   growl(volume,pan,scare=false){
@@ -92,9 +98,11 @@ export class Sound {
       this.tone(135,.25,'triangle',.045,.035,0,this.effects,72);
       this.noiseBurst(.10,0,.08,550,this.effects,.18,110);
     }
+    if(name==='call-connect'){this.tone(620,.09,'sine',.055);this.tone(930,.13,'sine',.045,.10);}
+    if(name==='call-end'){this.tone(740,.10,'sine',.045);this.tone(440,.16,'sine',.045,.12);}
     if(name==='call-ring')for(const delay of [0,.2,.45]){this.tone(880,.14,'sine',.08,delay);this.tone(1320,.14,'sine',.035,delay);}
-    if(name==='mains-fail'){this.tone(110,.65,'sawtooth',.07,0,0,this.effects,24);this.noiseBurst(.14,0,.12,650,this.effects,0,100);}
-    if(name==='backup-start'){this.tone(42,.65,'triangle',.065,0,0,this.effects,110);this.noiseBurst(.08,0,.18,480,this.effects,.15,80);this.tone(660,.15,'sine',.035,.5);}
+    if(name==='mains-fail'||name==='backup-start')this.opening?.play(name);
+    if(name==='backup-ready'){this.noiseBurst(.25,0,.13,1100,this.effects);this.tone(115,.25,'triangle',.12);this.tone(660,.18,'sine',.07,.2);}
     if(name==='phone-a'||name==='phone-b'){this.tone(697,.09,'sine',.035);this.tone(1209,.09,'sine',.025);}
     if(name==='power-on'){
       this.noiseBurst(.23,0,.15,600,this.effects,0,120);
@@ -142,14 +150,14 @@ export class Sound {
     if(repairStep>this.repairStep&&repairStep<16){this.noiseBurst(.055,0,.1,1100,this.effects,0,400);this.tone(85,.09,'triangle',.025);}
     this.repairStep=repairStep;
   }
-  update(dt,speed,d,pan,occluded,escape,enemySpeed=0,playerSteps=0){
+  update(dt,speed,d,pan,occluded,escape,enemySpeed=0,playerSteps=0,chasing=false){
     // Camera foot plants and audible footfalls share a single distance clock.
     for(let i=0;i<playerSteps;i++){this.foot++;this.step(.105,(this.foot%2?1:-1)*.15);}
     if(!this.playing)return;
-    this.music?.update(dt,d,occluded,escape);
+    this.music?.update(dt,d,occluded,escape,chasing);
     const mix=proximityMix(d,occluded);
     if(enemySpeed>.02){this.enemyStride+=enemySpeed*2.4*dt;if(this.enemyStride>=1.65){this.enemyStride%=1.65;if(mix.footGain>.01)this.step(mix.footGain,pan,true);}}
-    this.heartClock-=dt;if(mix.heartGain>.001&&this.heartClock<=0){this.heartbeat(mix.heartGain);this.heartClock=mix.heartInterval;}
+    this.heartClock=Math.min(this.heartClock,mix.heartInterval)-dt;if(mix.heartGain>.001&&this.heartClock<=0){this.heartbeat(mix.heartGain);this.heartClock=mix.heartInterval;}
     this.voiceClock-=dt;if(mix.voiceGain>.025&&enemySpeed>.02&&this.voiceClock<=0){this.growl(mix.voiceGain,pan);this.voiceClock=escape?3.8:4.6+Math.random()*1.6;}
   }
 }

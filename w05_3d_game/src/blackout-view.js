@@ -1,3 +1,4 @@
+import {buildControlRoom} from './control-room-view.js';
 import * as THREE from '../vendor/three.module.js';
 import {BLACKOUT_LAYOUT,BLACKOUT_RULES} from './blackout-layout.js';
 import {MAP_CENTER,ENTRY_GATE,SAFE_ROOM,isInSafeRoom,isOpen} from './world.js';
@@ -177,14 +178,7 @@ export function buildBlackoutView(v,world,unit){
     batchStaticMeshes(item);return{site,group:item};
   });
 
-  const terminal=frame(BLACKOUT_LAYOUT.console);
-  box(.91,.047,.25,v.mat.wood,0,.92,.126,terminal);box(.78,.12,.026,dark,0,.838,.030,terminal);
-  for(const x of [-.34,.34]){box(.025,.30,.028,steel,x,.755,.034,terminal);const brace=box(.025,.25,.022,steel,x,.81,.123,terminal);brace.rotation.x=-.48;}
-  box(.70,.48,.055,dark,0,1.33,.062,terminal);box(.631,.391,.012,rubber,0,1.34,.096,terminal);
-  label(terminal,'安防监控','HALLS  /  SECURITY NETWORK',.593,.352,0,1.34,.104,{lit:true,ink:'#80a795',background:'#101e1a'});
-  box(.43,.018,.115,dark,0,.959,.159,terminal);
-  for(let row=0;row<3;row++)for(let col=0;col<10;col++)box(.025,.004,.019,cream,-.162+col*.036,.971,.128+row*.027,terminal);
-  label(terminal,'独立应急供电','SECURITY  /  BACKUP CIRCUIT',.72,.15,0,1.76,.035,{lit:true});
+  const controlRoom=buildControlRoom(v,world,unit,fixed,dynamic);
   const fixture=new THREE.Group();fixture.position.copy(world(ENTRY_GATE.x,ENTRY_GATE.z)).add(new THREE.Vector3(-opening/2,0,1.05));fixture.rotation.y=Math.PI/2;fixed.add(fixture);
   box(.16,.27,.04,dark,0,2.11,.03,fixture);box(.11,.17,.05,cream,0,2.11,.075,fixture);
   const emergencyGlass=new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.72,1.05),toneMapped:false});box(.087,.139,.025,emergencyGlass,0,2.11,.111,fixture);
@@ -250,5 +244,5 @@ export function buildBlackoutView(v,world,unit){
   }
   function warmup(){const states=[group.visible,preparation.legacy.visible,flashlight.visible,hideMask.visible];group.visible=preparation.legacy.visible=flashlight.visible=hideMask.visible=true;return()=>{[group.visible,preparation.legacy.visible,flashlight.visible,hideMask.visible]=states;};}
   v.detailAudit.blackout={phones:phones.length,lockers:lockers.length,batteries:batteries.length,maxPropProjection:.25,extraShadowLights:1,batch};
-  return{group,fixed,dynamic,gate,leaf,doorHeight,progress,phones,lockers,batteries,flashlight,hideMask,preparation,update,allowedLamp,warmup};
+  return{controlRoom,group,fixed,dynamic,gate,leaf,doorHeight,progress,phones,lockers,batteries,flashlight,hideMask,preparation,update,allowedLamp,warmup};
 }

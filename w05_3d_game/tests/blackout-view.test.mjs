@@ -7,12 +7,12 @@ import {MAP_CENTER,CELL_SIZE,ENTRY_GATE,SAFE_ROOM,gateWall} from '../src/world.j
 import {createBlackoutState} from '../src/blackout-state.js';
 import {beveledBoxGeometry} from '../src/joinery.js';
 
-globalThis.document={createElement:()=>{const canvas={width:0,height:0,texts:[]};canvas.getContext=()=>({fillRect(){},strokeRect(){},fillText(text){canvas.texts.push(text);},beginPath(){},moveTo(){},lineTo(){},closePath(){},fill(){}});return canvas;}};
+globalThis.document={createElement:()=>{const canvas={width:0,height:0,texts:[]};canvas.getContext=()=>({fillRect(){},strokeRect(){},fillText(text){canvas.texts.push(text);},beginPath(){},moveTo(){},lineTo(){},closePath(){},fill(){},arc(){},stroke(){}});return canvas;}};
 const world=(x,z,y=0)=>new THREE.Vector3((x-MAP_CENTER.x)*CELL_SIZE,y,(z-MAP_CENTER.z)*CELL_SIZE);
 function fixture(width=BLACKOUT_RULES.corridorWidth,beforePrepare){
   const scene=new THREE.Scene(),mat=Object.fromEntries(['wood','brass','black','cloth','glow'].map(key=>[key,new THREE.MeshStandardMaterial()]));
   mat.glow=new THREE.MeshBasicMaterial({color:new THREE.Color(2.55,2.55,2.55),toneMapped:false});
-  const v={scene,mat,corridorWidth:width,ceilingHeight:2.7,detailAudit:{},lampPositions:[],assetJobs:[],lights:[],motionTuning:{brightness:.7},renderer:{toneMappingExposure:.672},camera:new THREE.PerspectiveCamera(60,16/9,.045,70),hemisphereLight:new THREE.HemisphereLight(),ambientLight:new THREE.AmbientLight(),cameraLight:new THREE.PointLight(),safeRoom:{group:new THREE.Group()},shardMesh:new THREE.Group(),shardGlow:new THREE.Group(),exit:new THREE.Group(),
+  const v={scene,mat,corridorWidth:width,ceilingHeight:2.7,detailAudit:{},lampPositions:[],assetJobs:[],lights:[],motionTuning:{brightness:.7},renderer:{toneMappingExposure:.672,capabilities:{getMaxAnisotropy:()=>8}},camera:new THREE.PerspectiveCamera(60,16/9,.045,70),hemisphereLight:new THREE.HemisphereLight(),ambientLight:new THREE.AmbientLight(),cameraLight:new THREE.PointLight(),safeRoom:{group:new THREE.Group()},shardMesh:new THREE.Group(),shardGlow:new THREE.Group(),exit:new THREE.Group(),
     mesh(g,m,parent=scene){const mesh=new THREE.Mesh(g,m);parent.add(mesh);return mesh;},box(w,h,d,m,x,y,z,parent=scene){const mesh=this.mesh(beveledBoxGeometry(w,h,d),m,parent);mesh.position.set(x,y,z);return mesh;}};
   for(const cell of [{x:22,z:10},{x:(SAFE_ROOM.minX+SAFE_ROOM.maxX)/2,z:(SAFE_ROOM.minZ+SAFE_ROOM.maxZ)/2}]){const bulb=v.mesh(new THREE.SphereGeometry(.1,8,4),mat.glow);bulb.position.copy(world(cell.x,cell.z,2.45));v.lampPositions.push(world(cell.x,cell.z,2.4));}
   beforePrepare?.(v);

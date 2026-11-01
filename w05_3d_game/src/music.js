@@ -3,9 +3,10 @@ const clamp=v=>Math.max(0,Math.min(1,v));
 export class DistanceMusicState {
   constructor(){this.reset();}
   reset(){this.near=false;this.hold=0;this.blend=0;}
-  update(dt,distance){
+  update(dt,distance,occluded=false,escape=false,chasing=false){
     dt=Math.max(0,Math.min(.1,dt));
-    if(distance<=4){this.near=true;this.hold=1.5;}
+    if(chasing){this.near=true;this.hold=1.5;this.blend=1;}
+    else if(distance<=4){this.near=true;this.hold=1.5;}
     else if(distance>=5.2){this.hold=Math.max(0,this.hold-dt);if(this.hold===0)this.near=false;}
     this.blend+=((this.near?1:0)-this.blend)*(1-Math.exp(-dt*3.2));
     const level=.45*(1-clamp((3.2-distance)/2.6)*.25);
@@ -16,14 +17,14 @@ export class DistanceMusicState {
 export class MusicState {
   constructor(){this.reset();}
   reset(){this.hold=0;this.pressure=0;this.chase=0;this.escape=0;}
-  update(dt,distance,occluded,escape){
+  update(dt,distance,occluded,escape,chasing=false){
     dt=Math.max(0,Math.min(.1,dt));
     const pressure=clamp((9-distance)/7)*(occluded?.68:1);
-    if(distance<2.8||(!occluded&&distance<5.8))this.hold=3.5;else this.hold=Math.max(0,this.hold-dt);
+    if(chasing||distance<2.8||(!occluded&&distance<5.8))this.hold=3.5;else this.hold=Math.max(0,this.hold-dt);
     const chase=this.hold>0?1:0;
     const approach=(value,target,rise,fall)=>value+(target-value)*(1-Math.exp(-dt*(target>value?rise:fall)));
     this.pressure=approach(this.pressure,pressure,3.5,.7);
-    this.chase=approach(this.chase,chase,2.8,.55);
+    this.chase=chasing?1:approach(this.chase,chase,2.8,.55);
     this.escape=approach(this.escape,escape?1:0,1.8,1.8);
     // Music yields to nearby footsteps, breathing and the heartbeat.
     const duck=1-clamp((3.2-distance)/2.6)*.32;
@@ -41,7 +42,7 @@ export function prepareScore(){
 
 export class MusicDirector {
   constructor(context,output,prepared){
-    this.ctx=context;this.state=new MusicState();this.keys=STEMS;this.loaded=false;this.active=false;this.offset=0;this.startedAt=0;this.sources=[];this.buffers={};this.volume=.65;
+    this.ctx=context;this.state=new MusicState();this.keys=STEMS;this.loaded=false;this.active=false;this.offset=0;this.startedAt=0;this.sources=[];this.buffers={};this.volume=.325;
     this.bus=context.createGain();this.bus.gain.value=0;this.bus.connect(output);
     this.gains=Object.fromEntries(STEMS.map(key=>{const node=context.createGain();node.gain.value=key==='exploration'?.48:0;node.connect(this.bus);return[key,node];}));
     this.ready=prepared.then(async score=>{
@@ -91,6 +92,6 @@ export class MusicDirector {
     if(active)this.startSources();else this.stopSources();
   }
   setVolume(value){this.volume=clamp(value);if(this.active)this.bus.gain.setTargetAtTime(this.volume,this.ctx.currentTime,.08);}
-  reset(){this.stopSources();this.offset=0;this.state.reset();for(const key of this.keys){const gain=this.gains[key].gain;gain.cancelScheduledValues(this.ctx.currentTime);gain.setValueAtTime(key==='exploration'?.48:key==='far'?.45:0,this.ctx.currentTime);}if(this.active)this.startSources();}
-  update(dt,distance,occluded,escape){if(!this.active)return;const target=this.state.update(dt,distance,occluded,escape);for(const key of this.keys)this.gains[key].gain.setTargetAtTime(target[key],this.ctx.currentTime,.06);}
+  reset(){this.chasing=false;this.stopSources();this.offset=0;this.state.reset();for(const key of this.keys){const gain=this.gains[key].gain;gain.cancelScheduledValues(this.ctx.currentTime);gain.setValueAtTime(key==='exploration'?.48:key==='far'?.45:0,this.ctx.currentTime);}if(this.active)this.startSources();}
+  update(dt,distance,occluded,escape,chasing=false){if(!this.active)return;const immediate=chasing&&!this.chasing;this.chasing=chasing;if(immediate){this.bus.gain.cancelScheduledValues(this.ctx.currentTime);this.bus.gain.setValueAtTime(this.volume,this.ctx.currentTime);}const target=this.state.update(dt,distance,occluded,escape,chasing);for(const key of this.keys){const gain=this.gains[key].gain;if(immediate){gain.cancelScheduledValues(this.ctx.currentTime);gain.setValueAtTime(target[key],this.ctx.currentTime);}else gain.setTargetAtTime(target[key],this.ctx.currentTime,.06);}}
 }

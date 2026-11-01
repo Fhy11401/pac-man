@@ -89,29 +89,32 @@ const sentenceCount=TUTORIAL_LINES.reduce((total,line)=>total+line.sentences.len
 const clock=value=>`${Math.floor(value/60).toString().padStart(2,'0')}:${Math.floor(value%60).toString().padStart(2,'0')}`;
 
 export class TutorialCall{
-  constructor({onOpen=()=>{},onClose=()=>{},onRing=()=>{},sound=null,doc=document,createAudio=()=>new Audio(),audioConfig=TUTORIAL_AUDIO_CONFIG}={}){
-    this.onOpen=onOpen;this.onClose=onClose;this.onRing=onRing;this.sound=sound;this.audioConfig=audioConfig;this.audioReady=narrationReady(audioConfig);
-    this.el=Object.fromEntries(['tablet','tutorial-call','call-next','call-hangup','call-caption','call-progress','call-caller','call-duration','call-media-state','call-hold','call-hold-label','call-speaker'].map(id=>[id,doc.getElementById(id)]));
+  constructor({onIncoming=()=>{},onOpen=()=>{},onClose=()=>{},onRing=()=>{},sound=null,doc=document,createAudio=()=>new Audio(),audioConfig=TUTORIAL_AUDIO_CONFIG}={}){
+    this.onIncoming=onIncoming;this.onOpen=onOpen;this.onClose=onClose;this.onRing=onRing;this.sound=sound;this.audioConfig=audioConfig;this.audioReady=narrationReady(audioConfig);
+    this.el=Object.fromEntries(['tablet','tutorial-call','call-hangup','call-answer','call-decline','call-caption','call-caller','call-duration','call-hold','call-hold-label','call-speaker'].map(id=>[id,doc.getElementById(id)]));
     this.state='idle';this.index=0;this.sentenceIndex=0;this.active=true;this.held=false;this.elapsed=0;this.advance=0;this.generation=0;this.playAttempt=0;this.disposed=false;this.audioMode='captions';this.localMuted=false;this.ended=false;
     this.audio=createAudio();this.audio.preload='none';this.audio.volume=.85;this.audio.defaultPlaybackRate=1;this.audio.playbackRate=1;
-    this.el['call-next'].onclick=()=>this.next();this.el['call-hangup'].onclick=()=>this.close();
+    this.el['call-hangup'].onclick=()=>this.close();this.el['call-answer'].onclick=()=>{if(this.active&&this.ringing)this.startConnected();};this.el['call-decline'].onclick=()=>this.close();
     this.el['call-hold'].onclick=()=>this.toggleHold();this.el['call-speaker'].onclick=()=>{if(this.active&&this.open&&this.audioMode==='voice'){this.localMuted=!this.localMuted;this.syncMute();}};
     this.syncVisibility();this.syncControls();
   }
   get open(){return this.state==='connected';}
-  syncVisibility(){const hidden=!this.active||!this.open;this.el['tutorial-call'].hidden=hidden;this.el['tutorial-call'].inert=hidden;this.el.tablet.dataset.call=String(!hidden);}
+  get ringing(){return this.state==='ringing';}
+  get busy(){return this.open||this.ringing;}
+  startIncoming(){if(this.disposed)return;this.stop();this.state='ringing';this.ringClock=0;this.ringElapsed=0;this.el['tutorial-call'].dataset.state='ringing';this.el['call-duration'].textContent='酒店内线来电';this.syncVisibility();this.onIncoming();this.onRing();if(this.active)this.el['call-answer'].focus({preventScroll:true});}
+  syncVisibility(){const hidden=!this.active||!this.busy;this.el['tutorial-call'].hidden=hidden;this.el['tutorial-call'].inert=hidden;this.el.tablet.dataset.call=String(!hidden);this.el['call-caption'].hidden=hidden||!this.open;}
   syncControls(){
     const state=`${this.held}|${this.audioMode}|${this.audio.muted}`;if(this.controlState===state)return;this.controlState=state;
     this.el['call-hold'].setAttribute('aria-pressed',String(this.held));this.el['call-hold-label'].textContent=this.held?'继续':'保留';
     this.el['call-speaker'].disabled=this.audioMode!=='voice';this.el['call-speaker'].setAttribute('aria-pressed',String(this.audioMode==='voice'&&!this.audio.muted));
-    this.el['call-media-state'].textContent=this.held?'已暂停':this.audioMode==='voice'?'英语 · 中文字幕':'字幕';this.el['tutorial-call'].dataset.audioMode=this.audioMode;
+    this.el['tutorial-call'].dataset.audioMode=this.audioMode;
   }
   syncMute(){this.audio.muted=Boolean(this.sound?.muted||this.localMuted);this.syncControls();}
   start(){this.startConnected();}
   startConnected(){
     if(this.disposed)return;this.stop();this.state='connected';this.index=0;this.sentenceIndex=0;this.elapsed=0;this.held=false;this.localMuted=false;
     this.el['tutorial-call'].dataset.state='connected';this.el['call-caller'].textContent='夜班主管';this.el['call-duration'].textContent='00:00';this.syncVisibility();this.onOpen();this.playLine();
-    if(this.active)this.el['call-next'].focus({preventScroll:true});
+    if(this.active)this.el['call-hangup'].focus({preventScroll:true});
   }
   connectAudio(){
     if(this.audioSource||!this.sound?.ctx)return;const ctx=this.sound.ctx;
@@ -127,9 +130,7 @@ export class TutorialCall{
   showSentence(index){
     this.sentenceIndex=index;const line=TUTORIAL_LINES[this.index],sentence=line.sentences[index];
     this.el['call-caption'].textContent=sentence.text;
-    const number=TUTORIAL_LINES.slice(0,this.index).reduce((total,item)=>total+item.sentences.length,0)+index+1;
-    this.el['call-progress'].textContent=`${number} / ${sentenceCount} · ${line.title}`;
-    this.el['call-next'].textContent=number===sentenceCount?'结束通话':'下一句 ›';this.advance=sentence.seconds;
+    this.advance=sentence.seconds;
   }
   cueStarts(){
     const line=TUTORIAL_LINES[this.index],clip=this.audioConfig.clips[this.index],cues=clip?.cues;
@@ -169,10 +170,13 @@ export class TutorialCall{
   setActive(value){
     value=Boolean(value);this.syncMute();if(this.active===value)return;this.active=value;this.syncVisibility();
     if(!value){this.playAttempt++;this.audio.pause();}
-    else if(this.open){if(!this.ended)this.requestPlay();this.el['call-next'].focus({preventScroll:true});}
+    else if(this.ringing)this.el['call-answer'].focus({preventScroll:true});
+    else if(this.open){if(!this.ended)this.requestPlay();this.el['call-hangup'].focus({preventScroll:true});}
   }
   update(dt){
-    this.syncMute();if(!this.active||!this.open||!Number.isFinite(dt)||dt<=0)return;
+    this.syncMute();if(!this.active||!Number.isFinite(dt)||dt<=0)return;
+    if(this.ringing){this.ringClock+=dt;this.ringElapsed+=dt;if(this.ringElapsed>=30){this.close();return;}if(this.ringClock>=3){this.ringClock%=3;this.onRing();}return;}
+    if(!this.open)return;
     this.elapsed+=dt;const display=clock(this.elapsed);if(this.el['call-duration'].textContent!==display)this.el['call-duration'].textContent=display;
     if(this.held)return;
     if(this.audioMode==='voice'){
@@ -187,10 +191,10 @@ export class TutorialCall{
     this.generation++;this.playAttempt++;this.audio.onended=null;this.audio.onerror=null;this.audio.pause();this.audio.removeAttribute?.('src');this.audio.load?.();
     this.advance=0;this.held=false;this.ended=false;this.state='idle';this.syncVisibility();
   }
-  close(){if(!this.open)return;this.stop();this.onClose();}
+  close(){if(!this.busy)return;this.stop();this.onClose();}
   destroy(){
     if(this.disposed)return;this.stop();this.disposed=true;
-    for(const id of ['call-next','call-hangup','call-hold','call-speaker'])this.el[id].onclick=null;
+    for(const id of ['call-hangup','call-answer','call-decline','call-hold','call-speaker'])this.el[id].onclick=null;
     this.audioSource?.disconnect?.();this.highpass?.disconnect?.();this.lowpass?.disconnect?.();this.audioSource=null;this.highpass=null;this.lowpass=null;
   }
 }
