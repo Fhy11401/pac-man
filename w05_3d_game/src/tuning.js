@@ -33,8 +33,9 @@ export const TUNING_GROUPS = [
     {key:'turnStability',label:'转向稳像',value:.8,min:0,max:1,step:.05,unit:'%'},
   ]},
   {title:'敌人追逐',fields:[
-    {key:'enemySpeed',label:'普通追逐速度',value:2.05,min:1,max:3.2,step:.05,unit:'格/秒'},
-    {key:'escapeEnemySpeed',label:'撤离追逐速度',value:2.4,min:1,max:3.8,step:.05,unit:'格/秒'},
+    {key:'enemyPatrolSpeed',label:'巡逻与调查速度',value:1.8,min:1,max:3.2,step:.05,unit:'格/秒'},
+    {key:'enemySpeed',label:'普通追逐速度',value:2.4,min:1,max:3.2,step:.05,unit:'格/秒'},
+    {key:'escapeEnemySpeed',label:'撤离阶段速度',value:2.8,min:1,max:3.8,step:.05,unit:'格/秒'},
   ]},
   {title:'地图显示',id:'developer-map-options',fields:[
     {key:'localMapScale',label:'局部地图放大',value:1.5,min:1.4,max:3,step:.1,unit:'×'},
@@ -42,5 +43,5 @@ export const TUNING_GROUPS = [
 ];
 export const TUNING_FIELDS=TUNING_GROUPS.flatMap(group=>group.fields);
 export const DEFAULT_TUNING=Object.freeze(Object.fromEntries(TUNING_FIELDS.map(f=>[f.key,f.value])));
-export const MOVEMENT_KEYS=['playerSpeed','sprintSpeed','walkStart','sprintStart','movementInertia','turnFollow','enemySpeed','escapeEnemySpeed','playerRadius','corridorWidth'];
+export const MOVEMENT_KEYS=['playerSpeed','sprintSpeed','walkStart','sprintStart','movementInertia','turnFollow','enemyPatrolSpeed','enemySpeed','escapeEnemySpeed','playerRadius','corridorWidth'];
 export const formatTuning=(field,value)=>field.unit==='body'?`${(value*4.8).toFixed(2)} 米`:field.unit==='%'?`${Math.round(value*100)}%`:field.unit==='°'?`${value}°`:field.unit==='×'?`${value.toFixed(1)}×`:`${value.toFixed(2)} ${field.unit}`;

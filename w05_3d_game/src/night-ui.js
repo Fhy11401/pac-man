@@ -1,10 +1,10 @@
+import {POWER_SECTORS,restoredCount} from './power-grid.js';
 import {NIGHTS,nightClock} from './night-session.js';
 import {securityMapNavigation} from './blackout-ui.js';
-import {isInSafeRoom} from './world.js';
 import {BLACKOUT_RULES} from './blackout-layout.js';
 const text=(node,value)=>{if(node.textContent!==value)node.textContent=value;};
 export class NightUI{
-  constructor({navigate,back,start,changeSetting,resetSettings,fullscreen,officeAction}){
+  constructor({navigate,back,start,changeSetting,resetSettings,fullscreen}){
     this.root=document.getElementById('night-shell');
     const by=id=>document.getElementById(id);this.by=by;
     const grid=by('night-cards'),map=securityMapNavigation().svg.replace(/id="[^"]*"/g,'');
@@ -14,7 +14,6 @@ export class NightUI{
     for(const input of document.querySelectorAll('[data-ui-setting]'))input.addEventListener('input',()=>changeSetting(input.dataset.uiSetting,input.type==='checkbox'?input.checked:Number(input.value)));
     by('option-reset').onclick=resetSettings;by('option-fullscreen').onclick=fullscreen;
     for(const list of this.root.querySelectorAll('[role=tablist]'))list.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const buttons=[...list.querySelectorAll('[role=tab]')],current=buttons.indexOf(document.activeElement);if(current<0)return;event.preventDefault();const index=event.key==='Home'?0:event.key==='End'?buttons.length-1:(current+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;buttons[index].click();buttons[index].focus();});
-    for(const button of document.querySelectorAll('[data-office-action]'))button.onclick=()=>officeAction(button.dataset.officeAction);
     document.addEventListener('fullscreenchange',()=>text(by('option-fullscreen'),document.fullscreenElement?'退出全屏 / WINDOWED':'进入全屏 / FULLSCREEN'));
     this.selectSettings('audio');
   }
@@ -31,11 +30,8 @@ export class NightUI{
     if(open&&this.lastScreen!==screen)this.by('shell-title').focus({preventScroll:true});this.lastScreen=screen;
   }
   update(game,{active=false,intro=false,callBusy=false,custom=false}={}){
-    const b=game.blackout,office=active&&!intro&&!callBusy&&game.phase==='playing'&&b&&isInSafeRoom(game.player)&&!b.monitor&&!b.monitorConnecting&&!b.hidden;
-    this.by('office-controls').hidden=!office;this.by('office-controls').inert=!office;
-    for(const button of this.by('office-controls').querySelectorAll('button'))button.disabled=!office;
-    if(office){const label=b.doorProgress>0&&b.doorProgress<1?'MOVING':b.doorClosed?'CLOSED':'OPEN';text(this.by('office-door-state'),label);this.by('office-door').setAttribute('aria-pressed',String(b.doorClosed));this.by('office-light').setAttribute('aria-pressed',String(b.flashlight));text(this.by('office-light-state'),b.flashlight?'ON':'OFF');text(this.by('office-power'),b.powerOn?'MAINS ONLINE':'BACKUP ONLINE');}
-    const visible=active&&!intro&&game.phase==='playing'&&Boolean(b);this.by('night-readout').hidden=!visible;
-    if(visible){text(this.by('night-clock'),nightClock(game.elapsed));text(this.by('night-number'),custom?'CUSTOM NIGHT':'NIGHT 1');text(this.by('night-battery'),`${Math.round(b.battery/BLACKOUT_RULES.batterySeconds*100)}%`);text(this.by('night-power'),b.powerOn?'ON':'OFF');this.by('night-battery-meter').value=b.battery/BLACKOUT_RULES.batterySeconds;}
+    const b=game.blackout;
+    const visible=active&&!intro&&!callBusy&&game.phase==='playing'&&Boolean(b);this.by('night-readout').hidden=!visible;
+    if(visible){text(this.by('night-clock'),nightClock(game.elapsed));text(this.by('night-number'),custom?'CUSTOM NIGHT':'NIGHT 1');text(this.by('night-battery'),`${Math.round(b.battery/BLACKOUT_RULES.batterySeconds*100)}%`);text(this.by('night-power'),b.powerOn?'ON':`${restoredCount(b)}/${POWER_SECTORS.length}`);this.by('night-battery-meter').value=b.battery/BLACKOUT_RULES.batterySeconds;}
   }
 }

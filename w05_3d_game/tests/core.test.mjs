@@ -136,13 +136,13 @@ for (const fps of [15, 30, 60, 144]) {
   });
 }
 
-test('Final escape pursuit is faster, still slower than player sprint', () => {
+test('Final escape pursuit is faster and matches player sprint', () => {
   const normal=createGame(),escape=createGame(),{origin,direction}=straightFixture();
   for(const g of [normal,escape]){g.player={x:origin.x+direction.x*4,z:origin.z+direction.z*4};g.enemy={...origin};g.enemyDelay=0;}
   escape.collected=new Set(SHARDS.map((_,i)=>i));
   tick(normal,{x:0,z:0},.1);tick(escape,{x:0,z:0},.1);
   assert.ok(Math.abs(distance(escape.enemy,origin)-RULES.escapeEnemySpeed*.1)<.00001);
-  assert.ok(distance(escape.enemy,origin)>distance(normal.enemy,origin));assert.ok(RULES.escapeEnemySpeed<RULES.sprintSpeed);
+  assert.ok(distance(escape.enemy,origin)>distance(normal.enemy,origin));assert.ok(RULES.escapeEnemySpeed===RULES.sprintSpeed);
 });
 test('Pickup trails are collected from the side of a clear corridor',()=>{
   const game=createGame(),index=SHARDS.findIndex(p=>!blocked({x:p.x,z:p.z+.5-wallInset()-RULES.playerRadius-.001})),shard=SHARDS[index];

@@ -51,6 +51,8 @@ test('public cameras cannot look into guest rooms through their physical doors',
 });
 
 class Element {
+    querySelector(selector){this.selected??={};return this.selected[selector]??=new Element();}
+    remove(){}
   constructor(tagName='div'){
     this.tagName=tagName.toUpperCase();this.children=[];this.parentNode=null;this.clientWidth=960;this.clientHeight=540;
     this.dataset={};this.attributes={};this.style={cssText:''};this.textContent='';this.listeners=new Map();

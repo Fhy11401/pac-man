@@ -1,3 +1,4 @@
+import {POWER_SECTORS,sectorAt,circuitProgress} from './power-grid.js';
 import {buildControlRoom} from './control-room-view.js';
 import * as THREE from '../vendor/three.module.js';
 import {BLACKOUT_LAYOUT,BLACKOUT_RULES} from './blackout-layout.js';
@@ -9,7 +10,7 @@ import {entryCollisionWalls} from './entry-state.js';
 import {blackoutVisualLighting} from './blackout-lighting.js';
 
 const clamp=value=>Math.max(0,Math.min(1,value));
-const reserved=[BLACKOUT_LAYOUT.power,...BLACKOUT_LAYOUT.phones,...BLACKOUT_LAYOUT.lockers,BLACKOUT_LAYOUT.console];
+const reserved=[...POWER_SECTORS,...BLACKOUT_LAYOUT.phones,...BLACKOUT_LAYOUT.lockers,BLACKOUT_LAYOUT.console];
 const inwardAngle=wall=>Math.atan2(-wall.x,-wall.z);
 const cellAt=(position,unit)=>({x:position.x/unit+MAP_CENTER.x,z:position.z/unit+MAP_CENTER.z});
 const inGuestRoom=p=>(BLACKOUT_LAYOUT.rooms??[]).some(({bounds:b})=>p.x>=b.minX-.01&&p.x<=b.maxX+.01&&p.z>=b.minZ-.01&&p.z<=b.maxZ+.01);
@@ -41,11 +42,13 @@ export function prepareBlackoutWorld(v,world,unit){
     const glow=source===v.mat.glow||source.isMeshBasicMaterial&&(source.blending===THREE.AdditiveBlending||Math.max(source.color.r,source.color.g,source.color.b)>1);
     if(!glow&&!(source.emissiveIntensity>0))return;
     if(isInSafeRoom(cellAt(object.getWorldPosition(new THREE.Vector3()),unit)))return;
-    let material=materials.get(source);
-    if(!material){material=source.clone();materials.set(source,material);emitters.push({material,color:material.color.clone(),emissive:material.emissiveIntensity,opacity:material.opacity,glow,additive:material.blending===THREE.AdditiveBlending});}
+    const point=cellAt(object.getWorldPosition(new THREE.Vector3()),unit),token=sectorAt(point).id;
+    let variants=materials.get(source);if(!variants){variants=new Map();materials.set(source,variants);}
+    let material=variants.get(token);
+    if(!material){material=source.clone();variants.set(token,material);emitters.push({point,material,color:material.color.clone(),emissive:material.emissiveIntensity,opacity:material.opacity,glow,additive:material.blending===THREE.AdditiveBlending});}
     object.material=material;
   });
-  const textured=[...materials].filter(([source])=>source.isMeshStandardMaterial);
+  const textured=[...materials].filter(([source])=>source.isMeshStandardMaterial).flatMap(([source,variants])=>[...variants.values()].map(material=>[source,material]));
   if(textured.length)v.assetJobs.push(Promise.all([...v.assetJobs]).then(()=>{
     if(v.disposed)return{key:'blackout-fixture-surfaces',loaded:false,disposed:true};
     // Fabric normals arrive asynchronously. The two power circuits share those
@@ -128,18 +131,22 @@ export function buildBlackoutView(v,world,unit){
     for(const x of [-.061,.061])for(const y of [1.071,1.289])screw(button,x,y,.051);
   }
 
-  const power=frame(BLACKOUT_LAYOUT.power),powerDynamic=frame(BLACKOUT_LAYOUT.power,dynamic);
+  const panels=POWER_SECTORS.map(site=>{
+  const power=frame(site),powerDynamic=frame(site,dynamic);
   box(.69,1.02,.020,rubber,0,1.36,.015,power);box(.65,.98,.105,dark,0,1.36,.073,power);
   box(.604,.928,.015,steel,0,1.36,.134,power);
   for(const x of [-.28,.28])for(const y of [.94,1.78])screw(power,x,y,.145);
   for(const y of [1.09,1.18]){box(.075,.038,.013,rubber,.18,y,.151,power);box(.014,.029,.014,cream,.18,y,.165,power);}
-  label(power,'主配电','MAIN DISTRIBUTION',.46,.145,0,1.65,.145);
+  label(power,`${site.number} · ${site.label}`,'SECTOR DISTRIBUTION',.46,.145,0,1.65,.145);
   label(power,'检修 · 长按 E','HOLD TO RESTORE POWER',.45,.14,0,1.015,.145,{ink:'#cab47c'});
   box(.418,.066,.013,rubber,0,1.412,.149,power);
   const progressMaterial=new THREE.MeshStandardMaterial({color:0x72aa83,roughness:.6,emissive:0x396b4a,emissiveIntensity:.55});
   const progress=box(.392,.037,.012,progressMaterial,0,1.412,.162,powerDynamic);progress.name='blackout-repair-progress';progress.scale.x=.001;
   const powerLamp=dial(powerDynamic,.017,.009,.24,1.53,.152,buttonMaterial.clone());
   for(let i=0;i<5;i++)box(.016,.018,.004,cream,-.16+i*.08,1.344,.145,power);
+  return {site,progress,progressMaterial,powerLamp};
+  });
+  const progress=panels[0].progress;
 
   const phones=BLACKOUT_LAYOUT.phones.map((site,index)=>{
     const room=frame(site),moving=frame(site,dynamic);room.translateX(-.57);moving.translateX(-.57);
@@ -198,7 +205,7 @@ export function buildBlackoutView(v,world,unit){
   const reflectionMaterials=new Map();v.scene.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshStandardMaterial&&!reflectionMaterials.has(material))reflectionMaterials.set(material,material.envMapIntensity);});
   const emergencyMaterials=new Map();group.traverse(object=>{const m=object.material;if(!m||emergencyMaterials.has(m))return;if(m.isMeshBasicMaterial||m.emissiveIntensity>0)emergencyMaterials.set(m,{color:m.color.clone(),emissive:m.emissiveIntensity});});
   let powerState=null,lastDoor=-1,wasFlash=false;
-  function allowedLamp(position,game){const visual=blackoutVisualLighting(game.blackout);if(!visual.enabled)return!position.blackoutOnly;if(visual.blackout)return false;return!preparation.replacedLamps.has(position)&&!preparation.legacyRoomLamps.has(position)&&(visual.powerOn||position.emergency||isInSafeRoom(cellAt(position,unit)));}
+  function allowedLamp(position,game){const visual=blackoutVisualLighting(game.blackout,cellAt(position,unit));if(!visual.enabled)return!position.blackoutOnly;if(visual.blackout)return false;return!preparation.replacedLamps.has(position)&&!preparation.legacyRoomLamps.has(position)&&(visual.powerOn||position.emergency||isInSafeRoom(cellAt(position,unit)));}
   function update(game,dt){
     const state=game.blackout,visual=blackoutVisualLighting(state),{enabled,key}=visual,power=visual.powerOn;
     group.visible=enabled;preparation.legacy.visible=!enabled;if(v.safeRoom)v.safeRoom.group.visible=!enabled;
@@ -207,7 +214,7 @@ export function buildBlackoutView(v,world,unit){
     // does not render a shadow map, rather than compiling a new light variant.
     hideMask.visible=enabled&&Boolean(state.hidden)&&!String(state.hidden).startsWith('bed:')&&game.phase==='playing';
     if(key!==powerState){
-      for(const entry of preparation.emitters){const m=entry.material;m.color.copy(entry.color);m.opacity=entry.opacity;if(entry.emissive!==undefined)m.emissiveIntensity=power?entry.emissive:0;if(!power&&entry.glow){if(entry.additive)m.opacity=0;else m.color.multiplyScalar(visual.blackout?0:.006);}}
+      for(const entry of preparation.emitters){const lit=blackoutVisualLighting(state,entry.point).powerOn,m=entry.material;m.color.copy(entry.color);m.opacity=entry.opacity;if(entry.emissive!==undefined)m.emissiveIntensity=lit?entry.emissive:0;if(!lit&&entry.glow){if(entry.additive)m.opacity=0;else m.color.multiplyScalar(visual.blackout?0:.006);}}
       for(const [material,value] of reflectionMaterials)material.envMapIntensity=value*(power?1:visual.blackout?.005:.09);
       for(const [material,initial] of emergencyMaterials){if(material.isMeshBasicMaterial)material.color.copy(initial.color).multiplyScalar(visual.blackout?0:1);if(initial.emissive!==undefined)material.emissiveIntensity=visual.blackout?0:initial.emissive;}
       if(v.hemisphereLight)v.hemisphereLight.intensity=power?.19:visual.blackout?.003:.018;
@@ -225,8 +232,10 @@ export function buildBlackoutView(v,world,unit){
     if(!enabled){flashlight.intensity=0;wasFlash=false;return;}
     const door=clamp(state.doorProgress??1);leaf.position.y=(1-door)*(doorHeight+.055);
     if(door!==lastDoor){for(const light of v.lights??[])if(light.position.distanceToSquared(gate.position)<70)light.shadow.needsUpdate=true;if(wasFlash)flashlight.shadow.needsUpdate=true;lastDoor=door;}
-    const amount=clamp(state.repairProgress??0);progress.scale.x=Math.max(.001,amount);progress.position.x=-(1-amount)*.196;
-    progressMaterial.color.setHex(state.powerOn?0xb5d0a0:0x72aa83);powerLamp.material.emissive.setHex(state.powerOn?0x53a87a:0xa76423);powerLamp.material.emissiveIntensity=state.powerOn?.9:.25;
+    for(const {site,progress,progressMaterial,powerLamp} of panels){
+    const amount=clamp(circuitProgress(state,site));progress.scale.x=Math.max(.001,amount);progress.position.x=-(1-amount)*.196;
+    progressMaterial.color.setHex(amount>=1?0xb5d0a0:0x72aa83);powerLamp.material.emissive.setHex(amount>=1?0x53a87a:0xa76423);powerLamp.material.emissiveIntensity=amount>=1?.9:.25;
+    }
     buttonMaterial.color.setHex(state.doorClosed?0xa17341:0x6fa488);buttonMaterial.emissive.setHex(state.doorClosed?0x783815:0x267445);
     phones.forEach(({receiver,ledMaterial,index})=>{const ringing=(state.phones[index]?.remaining??0)>0;receiver.rotation.z=ringing?Math.sin((game.elapsed??0)*34)*.026:0;ledMaterial.emissiveIntensity=ringing?1.2:.05;});
     if(visual.blackout)for(const [material,initial] of emergencyMaterials)if(initial.emissive!==undefined)material.emissiveIntensity=0;
@@ -243,6 +252,6 @@ export function buildBlackoutView(v,world,unit){
     if(hideMask.visible){const halfHeight=Math.tan(THREE.MathUtils.degToRad(v.camera.fov/2))*.31;hideMask.position.copy(v.camera.position);hideMask.quaternion.copy(v.camera.quaternion);hideMask.translateZ(-.31);hideMask.scale.set(halfHeight*v.camera.aspect,halfHeight,1);}
   }
   function warmup(){const states=[group.visible,preparation.legacy.visible,flashlight.visible,hideMask.visible];group.visible=preparation.legacy.visible=flashlight.visible=hideMask.visible=true;return()=>{[group.visible,preparation.legacy.visible,flashlight.visible,hideMask.visible]=states;};}
-  v.detailAudit.blackout={phones:phones.length,lockers:lockers.length,batteries:batteries.length,maxPropProjection:.25,extraShadowLights:1,batch};
-  return{controlRoom,group,fixed,dynamic,gate,leaf,doorHeight,progress,phones,lockers,batteries,flashlight,hideMask,preparation,update,allowedLamp,warmup};
+  v.detailAudit.blackout={phones:phones.length,lockers:lockers.length,batteries:batteries.length,maxPropProjection:.25,powerPanels:panels.length,extraShadowLights:1,batch};
+  return{controlRoom,group,fixed,dynamic,gate,leaf,doorHeight,progress,panels,phones,lockers,batteries,flashlight,hideMask,preparation,update,allowedLamp,warmup};
 }

@@ -8,7 +8,7 @@ export function threatMultiplier(preset){return preset?.threat===undefined?1:.55
 export function configureNight(game,preset){
   if(!preset||!game.blackout)return;const selected=customPreset(preset);
   game.lives=selected.lives;game.blackout.battery=selected.battery;
-  game.tuning.enemySpeed*=threatMultiplier(selected);game.tuning.escapeEnemySpeed*=threatMultiplier(selected);
+  game.tuning.enemyPatrolSpeed*=threatMultiplier(selected);game.tuning.enemySpeed*=threatMultiplier(selected);game.tuning.escapeEnemySpeed*=threatMultiplier(selected);
 }
 export function canContinue(game,started){return Boolean(started&&game&&['playing','caught','respawn'].includes(game.phase));}
 export function nightClock(elapsed){const minutes=Math.floor(Math.max(0,Number(elapsed)||0)/60),hour=Math.floor(minutes/60)%24;return `${hour%12||12}:${String(minutes%60).padStart(2,'0')} ${hour<12?'AM':'PM'}`;}

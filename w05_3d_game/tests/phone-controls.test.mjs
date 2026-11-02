@@ -10,6 +10,8 @@ test('the phone has only flashlight and surveillance while Q night vision remain
   assert.deepEqual([...appMarkup.matchAll(/<button id="([^"]+)"/g)].map(match=>match[1]),['phone-flashlight','phone-monitor']);
   const ids=new Set([...(html+securityMapNavigation().svg).matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]));assert(ids.has('blackout-vision'));assert(ids.has('blackout-battery'));assert(!ids.has('phone-nightvision'));
   class Element{
+    querySelector(selector){this.selected??={};return this.selected[selector]??=new Element();}
+    remove(){}
     constructor(){this.style={};this.dataset={};this.attributes={};this.children=[];this.listeners={};this.textContent='';this.classes=new Set();this.classList={toggle:(name,on)=>on?this.classes.add(name):this.classes.delete(name),remove:(...names)=>names.forEach(name=>this.classes.delete(name))};}
     setAttribute(name,value){this.attributes[name]=value;}append(...nodes){this.children.push(...nodes);}replaceChildren(...nodes){this.children=[...nodes];}
     addEventListener(type,fn){(this.listeners[type]??=[]).push(fn);}removeEventListener(type,fn){this.listeners[type]=this.listeners[type].filter(handler=>handler!==fn);}focus(){}scrollIntoView(){}

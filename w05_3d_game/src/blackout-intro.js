@@ -21,5 +21,6 @@ export class BlackoutIntro{
     }
     if(this.active)this.present();
   }
+  skip(){if(!this.active)return false;const game=this.game;this.stop();this.onComplete(game);return true;}
   stop(){if(this.game?.blackout)for(const key of ['introLighting','introShot','introTime'])delete this.game.blackout[key];this.active=false;this.game=null;}
 }

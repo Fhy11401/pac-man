@@ -1,3 +1,4 @@
+import {POWER_SECTORS} from '../src/power-grid.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three.module.js';
@@ -66,7 +67,7 @@ test('unlimited flashlight keeps its wall-shadow cone after night-vision battery
 
 test('repair, phone, battery and hiding state are reversible and do not allocate geometry during updates',()=>{
   const v=fixture(),b=v.blackoutView,g=game(),before=resources(v.scene);v.camera.position.copy(world(18,12,1.65));v.camera.rotation.y=.4;
-  const position=v.camera.position.clone(),rotation=v.camera.quaternion.clone();g.blackout.hidden='locker-fixture';g.blackout.repairProgress=.4;g.blackout.phones[0].remaining=3;g.elapsed=.17;g.blackout.batteries.add(BLACKOUT_LAYOUT.batteries[0].id);g.blackout.flashlight=true;
+  const position=v.camera.position.clone(),rotation=v.camera.quaternion.clone();g.blackout.hidden='locker-fixture';g.blackout.circuits[b.panels[0].site.id]=.4;g.blackout.phones[0].remaining=3;g.elapsed=.17;g.blackout.batteries.add(BLACKOUT_LAYOUT.batteries[0].id);g.blackout.flashlight=true;
   b.update(g,1/60);assert.equal(b.hideMask.visible,true);assert.equal(b.flashlight.intensity,0);assert.ok(position.equals(v.camera.position));assert.ok(rotation.equals(v.camera.quaternion));assert.equal(b.batteries[0].group.visible,false);assert.equal(b.batteries[1].group.visible,true);assert.equal(b.progress.scale.x,.4);assert.notEqual(b.phones[0].receiver.rotation.z,0);assert.equal(b.phones[1].receiver.rotation.z,0);
   const slatMaterial=b.hideMask.children[0].material,normalFloor=slatMaterial.emissiveIntensity;g.blackout.nightVision=true;b.update(g,1/60);assert.ok(Math.abs(slatMaterial.emissiveIntensity*14-normalFloor)<1e-12,'the near-eye louver floor is exposure compensated');
   g.blackout.hidden='bed:room-201';b.update(g,1/60);assert.equal(b.hideMask.visible,false,'bed hiding sees the real room without a locker screen overlay');assert.ok(rotation.equals(v.camera.quaternion));g.blackout.hidden='locker-fixture';
@@ -112,4 +113,30 @@ test('intro lighting cycles mains, complete outage and backup without changing r
   }
   materials.forEach((material,index)=>assert.equal(material.version,versions[index]));
   g.blackout.powerOn=true;b.update(g,0);assert.equal(b.allowedLamp(hall,g),true);assert.ok(publicBulb.material.color.equals(baseline));
+});
+
+test('sector bulbs sharing a source material switch independently without allocating lights',()=>{
+ const bulbs=[],points=[POWER_SECTORS[0],POWER_SECTORS[3]];
+ const v=fixture(2,v=>{for(const p of points){const bulb=v.mesh(new THREE.SphereGeometry(.1,8,4),v.mat.glow);bulb.position.copy(world(p.x,p.z+1,2.45));bulbs.push(bulb);}}),g=game();
+ assert.notEqual(bulbs[0].material,bulbs[1].material);v.blackoutView.update(g,0);
+ assert(bulbs.every(b=>b.material.color.r<.02));g.blackout.circuits[points[0].id]=1;v.blackoutView.update(g,0);
+ assert(bulbs[0].material.color.r>1);assert(bulbs[1].material.color.r<.02);
+ assert(v.blackoutView.allowedLamp(world(points[0].x,points[0].z+1,2.4),g));assert.equal(v.blackoutView.allowedLamp(world(points[1].x,points[1].z+1,2.4),g),false);
+ assert.equal(v.detailAudit.blackout.extraShadowLights,1);
+});
+
+test('television feeds are staggered, use the story camera only for its screen and go dark in the outage',()=>{
+ const v=fixture(),room=v.blackoutView.controlRoom,g=game(),draws=[];g.player={x:SAFE_ROOM.minX,z:SAFE_ROOM.minZ};
+ v.security={active:false};v.lampHalos={visible:true};let target=null;
+ Object.assign(v.renderer,{shadowMap:{autoUpdate:true},getRenderTarget:()=>target,setRenderTarget:t=>target=t,render:(scene,camera)=>draws.push({target,camera})});
+ v.openingScene={camera:new THREE.PerspectiveCamera()};g.blackout.introShot='monitor';
+ for(let i=0;i<30;i++){const count=draws.length;room.updateFeeds(g,1/60);assert(draws.length-count<=2,'at most one story and one background feed per frame');}
+ assert.equal(room.feeds.length,9);assert(room.feeds.every(f=>f.ready));
+ assert(draws.some(d=>d.target===room.focusFeed.target&&d.camera===v.openingScene.camera));
+ assert(draws.filter(d=>d.target!==room.focusFeed.target).every(d=>d.camera!==v.openingScene.camera));
+ assert.equal(room.focusFeed.target.width,1920);assert.equal(room.focusFeed.target.height,1080);
+ g.blackout.introTime=5.5;for(let i=0;i<6;i++){const n=draws.length;room.updateFeeds(g,1/144);assert.equal(draws.length-n,1);assert.equal(draws.at(-1).target,room.focusFeed.target,'close-up updates every display frame, without background feed passes');}
+ const fullCount=draws.length;g.blackout.introTime=6.7;room.updateFeeds(g,1/60);assert.equal(draws.length,fullCount,'full-screen film pass needs no duplicate monitor render');
+ const count=draws.length;g.blackout.introLighting='blackout';room.updateFeeds(g,.1);assert.equal(room.screenGroup.visible,false);assert.equal(draws.length,count);
+ g.blackout.introLighting='backup';g.blackout.introShot='return';room.updateFeeds(g,.1);assert.equal(room.screenGroup.visible,true);assert.equal(target,null);assert.equal(v.renderer.shadowMap.autoUpdate,true);assert.equal(v.lampHalos.visible,true);
 });

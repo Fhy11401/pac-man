@@ -26,7 +26,7 @@ test('Per-run speeds apply to walking and both pursuit stages without changing d
  tick(normal,{x:0,z:0},.1);tick(escape,{x:0,z:0},.1);
  assert.ok(Math.abs(normal.enemy.x-hall.origin.x-.22)<1e-9);assert.ok(Math.abs(escape.enemy.x-hall.origin.x-.27)<1e-9);
  const walk=mazeGame(tuning);walk.player=hall.at(0);tick(walk,{x:1,z:0},.1);tick(walk,{x:1,z:0},.1);assert.ok(Math.abs(walk.playerVelocity.x-1.9)<1e-9);
- normal.tuning.enemySpeed=3;assert.equal(escape.tuning.enemySpeed,2.2);assert.equal(fresh.tuning.enemySpeed,2.05);
+ normal.tuning.enemySpeed=3;assert.equal(escape.tuning.enemySpeed,2.2);assert.equal(fresh.tuning.enemySpeed,2.4);
 });
 
 test('Opt-in mouse speed gain preserves tiny input, direction and fast turns without drift',()=>{

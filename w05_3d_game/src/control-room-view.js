@@ -1,8 +1,10 @@
+import {openingPushProgress} from './opening-timing.js';
+import {POWER_SECTORS} from './power-grid.js';
 import * as THREE from '../vendor/three.module.js';
 import {MAP,MAP_WIDTH,MAP_HEIGHT,SAFE_ROOM,MAP_CENTER,isInSafeRoom} from './world.js';
 import {BLACKOUT_LAYOUT} from './blackout-layout.js';
 import {securityCameraPoses,SECURITY_CHANNELS} from './security-cameras.js';
-import {controlRoomLayout} from './control-room-layout.js';
+import {controlRoomLayout,controlMonitorLayout} from './control-room-layout.js';
 
 function hotelPlan(){
   const canvas=document.createElement('canvas');canvas.width=1536;canvas.height=1080;const c=canvas.getContext('2d');
@@ -18,8 +20,9 @@ function hotelPlan(){
   c.strokeStyle='#5d7066';c.lineWidth=1.4;c.beginPath();for(let z=0;z<MAP_HEIGHT;z++)for(let x=0;x<MAP_WIDTH;x++)if(MAP[z][x]!=='#')for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])if(MAP[z+dz]?.[x+dx]==='#'||MAP[z+dz]?.[x+dx]===undefined){const xx=ox+(x+(dx>0?1:0))*unit,zz=oz+(z+(dz>0?1:0))*unit;c.moveTo(xx,zz);c.lineTo(xx+(dx?0:unit),zz+(dz?0:unit));}c.stroke();
   c.textAlign='center';c.font='bold 20px Microsoft YaHei';c.fillStyle='#253e39';BLACKOUT_LAYOUT.halls.forEach(({bounds:b,label})=>c.fillText(label.split(' / ')[0],px((b.minX+b.maxX)/2),pz((b.minZ+b.maxZ)/2)+7));
   SECURITY_CHANNELS.forEach((camera,i)=>{const x=px(camera.position.x),y=pz(camera.position.z);c.fillStyle='#365951';c.beginPath();c.arc(x,y,11,0,Math.PI*2);c.fill();c.fillStyle='#f5f3df';c.font='bold 13px monospace';c.fillText(String(i+1).padStart(2,'0'),x,y+5);});
+  POWER_SECTORS.forEach(p=>{const x=px(p.x),y=pz(p.z);c.fillStyle='#955737';c.fillRect(x-13,y-11,26,22);c.fillStyle='#fff8df';c.font='bold 15px monospace';c.fillText(`P${p.number}`,x,y+5);});
   const sx=px((SAFE_ROOM.minX+SAFE_ROOM.maxX)/2),sz=pz((SAFE_ROOM.minZ+SAFE_ROOM.maxZ)/2);c.fillStyle='#b35e39';c.beginPath();c.arc(sx,sz,9,0,Math.PI*2);c.fill();c.font='bold 19px Microsoft YaHei';c.textAlign='left';c.fillText('您在此处 · 监控室',sx+18,sz+6);
-  c.fillStyle='#243b39';c.font='20px Microsoft YaHei';c.fillText('● 监控点位     ■ 公共大厅     ● 监控室',70,1010);c.textAlign='right';c.font='18px monospace';c.fillText('HOTEL OPERATIONS  /  KEEP FOR REFERENCE',1466,1010);
+  c.fillStyle='#243b39';c.font='20px Microsoft YaHei';c.fillText('● 监控点位     ■ 公共大厅     P1–P4 分区配电     ● 监控室',70,1010);c.textAlign='right';c.font='18px monospace';c.fillText('HOTEL OPERATIONS  /  KEEP FOR REFERENCE',1466,1010);
   return canvas;
 }
 
@@ -33,19 +36,29 @@ export function buildControlRoom(v,world,unit,fixed,dynamic){
   box(layout.deskWidth,.065,layout.depth,v.mat.wood,0,.79,.43);box(layout.deskWidth+.025,.024,.035,metal,0,.78,.85);
   for(const x of [-layout.deskWidth/2+.16,layout.deskWidth/2-.16]){box(.07,.73,.66,metal,x,.37,.41);box(.26,.04,.72,edge,x,.03,.43);}
   box(layout.deskWidth-.3,.30,.035,metal,0,.54,.13);
-  const screenGroup=new THREE.Group();screenGroup.name='security-live-screens';screenGroup.position.copy(root.position);screenGroup.rotation.copy(root.rotation);screenGroup.scale.z=layout.deskScale;dynamic.add(screenGroup);
-  const poses=securityCameraPoses(v.corridorWidth,unit),indices=[0,1,2,3,8,5].filter(i=>i<poses.length),feeds=[];
-  const spacing=layout.deskWidth/3,sw=spacing-.10,sh=sw*9/16;
-  for(const [i,index] of indices.entries()){
-    const x=(i%3-1)*spacing,y=1.15+Math.floor(i/3)*.66;
-    box(sw+.07,sh+.095,.09,edge,x,y,.13);box(sw+.015,sh+.025,.012,metal,x,y,.182);
-    if(i<3){box(.06,.20,.04,metal,x,.95,.11);box(.26,.025,.18,edge,x,.839,.18);}
-    const target=new THREE.WebGLRenderTarget(256,144,{depthBuffer:true,stencilBuffer:false});target.texture.colorSpace=THREE.SRGBColorSpace;target.texture.generateMipmaps=false;
-    const screenMaterial=new THREE.MeshBasicMaterial({map:target.texture,color:0xa5c3c0,toneMapped:false});plane(sw,sh,screenMaterial,x,y,.194,screenGroup);
-    const label=document.createElement('canvas');label.width=512;label.height=40;const c=label.getContext('2d');c.fillStyle='#101819';c.fillRect(0,0,512,40);c.fillStyle='#bad9cf';c.font='18px monospace';c.fillText(SECURITY_CHANNELS[index].code,12,26);c.textAlign='right';c.font='17px Microsoft YaHei';c.fillText(SECURITY_CHANNELS[index].label,496,26);
-    const tex=new THREE.CanvasTexture(label);tex.colorSpace=THREE.SRGBColorSpace;plane(sw,.045,new THREE.MeshBasicMaterial({map:tex,toneMapped:false}),x,y-sh/2-.027,.194,screenGroup);
-    const camera=new THREE.PerspectiveCamera(poses[index].fov,16/9,.045,70);camera.position.copy(poses[index].position);camera.lookAt(poses[index].target);camera.updateMatrixWorld(true);feeds.push({target,camera,index});
+  const bank=new THREE.Group();bank.name='operator-facing-television-bank';bank.position.copy(root.position);bank.rotation.copy(root.rotation);fixed.add(bank);
+  const screenGroup=new THREE.Group();screenGroup.name='security-live-screens';screenGroup.position.copy(root.position);screenGroup.rotation.copy(root.rotation);dynamic.add(screenGroup);
+  const poses=securityCameraPoses(v.corridorWidth,unit),feeds=[],led=new THREE.MeshBasicMaterial({color:0x879b6a,toneMapped:false});
+  for(const panel of controlMonitorLayout(layout,v.ceilingHeight)){
+    const {channel:index,x,y,z,yaw,pitch,width:sw,height:sh}=panel;if(!poses[index])continue;
+    const housing=new THREE.Group(),face=new THREE.Group();housing.position.set(x,y,z);housing.rotation.set(pitch,yaw,0,'YXZ');bank.add(housing);face.position.copy(housing.position);face.rotation.copy(housing.rotation);screenGroup.add(face);
+    box(sw+.12,sh+.13,.29,edge,0,0,-.125,housing);
+    box(sw+.06,sh+.065,.027,metal,0,0,.028,housing);
+    // Deep CRT casings, recessed glass, lower controls and ventilation slots.
+    for(let j=0;j<6;j++)box(.005,.08,.14,metal,sw/2+.061,-sh*.18,-.13+j*.008,housing);
+    cyl(.015,.014,keys,sw*.39,-sh/2-.043,.049,housing).rotation.x=Math.PI/2;
+    plane(.014,.009,led,sw*.32,-sh/2-.043,.049,housing);
+    const target=new THREE.WebGLRenderTarget(index===0?1920:640,index===0?1080:360,{type:index===0&&v.renderer.extensions?.has('EXT_color_buffer_float')?THREE.HalfFloatType:THREE.UnsignedByteType,samples:Math.min(4,v.renderer.capabilities.maxSamples??0),depthBuffer:true,stencilBuffer:false});target.texture.colorSpace=target.texture.type===THREE.HalfFloatType?THREE.NoColorSpace:THREE.SRGBColorSpace;target.texture.generateMipmaps=false;
+    const screenMaterial=new THREE.MeshBasicMaterial({map:target.texture,color:0xffffff,toneMapped:false});const display=plane(sw,sh,screenMaterial,0,0,.047,face);
+    const label=document.createElement('canvas');label.width=512;label.height=40;const c=label.getContext('2d');c.fillStyle='#101413';c.fillRect(0,0,512,40);c.fillStyle='#bac2b7';c.font='18px monospace';c.fillText(SECURITY_CHANNELS[index].code,12,26);c.textAlign='right';c.font='17px Microsoft YaHei';c.fillText(SECURITY_CHANNELS[index].label,496,26);
+    const tex=new THREE.CanvasTexture(label);tex.colorSpace=THREE.SRGBColorSpace;plane(sw*.68,.035,new THREE.MeshBasicMaterial({map:tex,toneMapped:false}),-sw*.10,-sh/2-.042,.050,face);
+    const camera=new THREE.PerspectiveCamera(poses[index].fov,sw/sh,.045,70);camera.position.copy(poses[index].position);camera.lookAt(poses[index].target);camera.updateMatrixWorld(true);feeds.push({target,camera,index,display,face,material:screenMaterial,panel,ready:false});
   }
+  const screenGlow=new THREE.PointLight(0x9eaca2,.65,3,2);screenGlow.position.set(0,1.35,.9).applyEuler(root.rotation).add(root.position);dynamic.add(screenGlow);
+  const seatLocal=new THREE.Vector3(layout.chairX,1.25,layout.chairZ),seatPosition=seatLocal.clone().applyAxisAngle(new THREE.Vector3(0,1,0),layout.angle).add(root.position);
+  screenGroup.updateMatrixWorld(true);
+  const focusFeed=feeds.find(f=>f.index===0)??feeds[0],focusPosition=new THREE.Vector3(),focusNormal=new THREE.Vector3();
+  focusFeed.display.getWorldPosition(focusPosition);focusFeed.display.getWorldDirection(focusNormal);
   box(.53,.027,.18,edge,-.36,.839,.59);for(let row=0;row<4;row++)for(let col=0;col<12;col++)box(.032,.007,.026,keys,-.58+col*.040,.858,.532+row*.036);
   box(.25,.005,.22,leather,.20,.826,.60);const mouse=v.mesh(new THREE.SphereGeometry(.04,12,8),keys,root);mouse.position.set(.20,.847,.60);mouse.scale.set(.7,.5,1.3);
   box(.20,.46,.40,edge,-layout.deskWidth/2+.42,.28,.40);for(let i=0;i<7;i++)box(.13,.005,.006,keys,-layout.deskWidth/2+.42,.17+i*.024,.604);
@@ -60,13 +73,28 @@ export function buildControlRoom(v,world,unit,fixed,dynamic){
   box(planWidth+.09,planHeight+.09,.035,v.mat.wood,0,1.66,.03,board);box(planWidth+.025,planHeight+.025,.018,metal,0,1.66,.057,board);
   const texture=new THREE.CanvasTexture(hotelPlan());texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,v.renderer.capabilities.getMaxAnisotropy());
   plane(planWidth,planHeight,new THREE.MeshStandardMaterial({map:texture,roughness:.88,emissiveMap:texture,emissive:0xffffff,emissiveIntensity:.14}),0,1.66,.068,board);
-  let clock=0,cursor=0,frames=0;
-  function updateFeeds(game,dt){
-    const b=game.blackout;if(!b||b.introLighting==='blackout'||!isInSafeRoom(game.player)||game.phase!=='playing'||v.security.active)return;
-    clock+=dt;if(clock<1/12||!feeds.length)return;clock%=1/12;
-    const feed=feeds[cursor++%feeds.length],renderer=v.renderer,previousTarget=renderer.getRenderTarget(),exposure=renderer.toneMappingExposure,ambient=v.ambientLight.intensity,hemi=v.hemisphereLight.intensity,shadow=renderer.shadowMap.autoUpdate,halos=v.lampHalos.visible;
-    try{screenGroup.visible=false;v.lampHalos.visible=false;renderer.shadowMap.autoUpdate=false;v.ambientLight.intensity=b.powerOn?1.2:1.8;v.hemisphereLight.intensity=.7;renderer.toneMappingExposure=.9;renderer.setRenderTarget(feed.target);renderer.render(v.scene,feed.camera);frames++;}
-    finally{renderer.setRenderTarget(previousTarget);renderer.toneMappingExposure=exposure;v.ambientLight.intensity=ambient;v.hemisphereLight.intensity=hemi;renderer.shadowMap.autoUpdate=shadow;v.lampHalos.visible=halos;screenGroup.visible=true;}
+  let clock=0,cursor=0,frames=0,introClock=0;
+  function drawFeed(feed,game,camera=feed.camera){
+    const renderer=v.renderer,previousTarget=renderer.getRenderTarget(),exposure=renderer.toneMappingExposure,ambient=v.ambientLight.intensity,hemi=v.hemisphereLight.intensity,shadow=renderer.shadowMap.autoUpdate,halos=v.lampHalos.visible,visible=screenGroup.visible;
+    try{screenGroup.visible=false;v.lampHalos.visible=false;
+      const story=game.blackout.introShot==='monitor'&&feed===focusFeed;
+      // Story lighting comes from the actual hall fixtures, like the main CCTV view.
+      renderer.shadowMap.autoUpdate=story?shadow:false;
+      if(!story){v.ambientLight.intensity=game.blackout.powerOn?1.2:1.8;v.hemisphereLight.intensity=.7;}
+      renderer.toneMappingExposure=.96*(v.motionTuning?.brightness??.7);renderer.setRenderTarget(feed.target);renderer.render(v.scene,camera);feed.ready=true;frames++;}
+    finally{renderer.setRenderTarget(previousTarget);renderer.toneMappingExposure=exposure;v.ambientLight.intensity=ambient;v.hemisphereLight.intensity=hemi;renderer.shadowMap.autoUpdate=shadow;v.lampHalos.visible=halos;screenGroup.visible=visible;}
   }
-  return{root,board,screenGroup,feeds,layout,updateFeeds,get frames(){return frames;},dispose(){feeds.forEach(({target})=>target.dispose());}};
+  function updateFeeds(game,dt){
+    const b=game.blackout;if(!b)return;screenGroup.visible=b.introLighting!=='blackout';screenGlow.intensity=screenGroup.visible?.65:0;
+    if(!screenGroup.visible||!isInSafeRoom(game.player)||game.phase!=='playing'||v.security.active)return;
+    const opening=b.introShot==='monitor',focused=opening&&openingPushProgress(b.introTime??0)>.22;
+    // Prime one screen per frame, then stagger refreshes. Only the story screen
+    // runs every frame during the push-in; nine full scenes are never drawn per frame.
+    if(opening&&openingPushProgress(b.introTime??0)===1)return;
+    const cold=feeds.find(f=>!f.ready);clock+=dt;introClock+=dt;
+    if(cold)drawFeed(cold,game,opening&&cold===focusFeed?v.openingScene.camera:cold.camera);
+    else if(!focused&&clock>=1/(opening?6:18)){clock%=1/(opening?6:18);const feed=feeds[cursor++%feeds.length];if(!opening||feed!==focusFeed)drawFeed(feed,game);}
+    if(opening&&focusFeed!==cold&&(focused||introClock>=1/30)){introClock%=1/30;drawFeed(focusFeed,game,v.openingScene.camera);}
+  }
+  return{root,bank,board,screenGroup,feeds,layout,seatPosition,focusPosition,focusNormal,focusFeed,updateFeeds,get frames(){return frames;},dispose(){feeds.forEach(({target})=>target.dispose());}};
 }

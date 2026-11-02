@@ -1,3 +1,4 @@
+import {HotelEditorState} from '../src/hotel-editor-state.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
@@ -20,10 +21,11 @@ function runtime(document,kind='hotel'){
     const {createGame,getBlackoutInteraction}=await import(${JSON.stringify(new URL('../src/core.js',import.meta.url).href)});
     const {securityRoomFurniture}=await import(${JSON.stringify(new URL('../src/security-room-layout.js',import.meta.url).href)});
     const {SecurityCameras}=await import(${JSON.stringify(new URL('../src/security-cameras.js',import.meta.url).href)});
+    const {POWER_SECTORS}=await import(${JSON.stringify(new URL('../src/power-grid.js',import.meta.url).href)});
     const game=createGame({},kind==='hotel'?{mode:'blackout'}:{});
     let interaction=null,cameraTarget=null,furniture=null;
     if(game.blackout){game.player={x:L.power.x,z:L.power.z};interaction=getBlackoutInteraction(game,Math.atan2(-L.power.wall.x,-L.power.wall.z));furniture=securityRoomFurniture().map(({room,phone,bed,desk})=>({id:room.id,phone,bed,desk}));const cameras=new SecurityCameras({renderer:{},film:{},home:null});cameraTarget=cameras.channels[0].target;cameras.dispose();}
-    console.log(JSON.stringify({width:world.MAP_WIDTH,height:world.MAP_HEIGHT,legacy:world.IS_MAP_DRAFT,hotel:world.IS_HOTEL_DRAFT,error:world.MAP_DRAFT_ERROR,blackout:Boolean(game.blackout),power:L.power,phones:L.phones,rooms:L.rooms,cameraTarget,furniture,interaction,roomDoors:game.blackout?Object.keys(game.blackout.roomDoors):[]}));
+    console.log(JSON.stringify({sectors:POWER_SECTORS,width:world.MAP_WIDTH,height:world.MAP_HEIGHT,legacy:world.IS_MAP_DRAFT,hotel:world.IS_HOTEL_DRAFT,error:world.MAP_DRAFT_ERROR,blackout:Boolean(game.blackout),power:L.power,phones:L.phones,rooms:L.rooms,cameraTarget,furniture,interaction,roomDoors:game.blackout?Object.keys(game.blackout.roomDoors):[]}));
   `;
   const result=spawnSync(process.execPath,['--input-type=module','-e',source],{encoding:'utf8',env:{...process.env,HOTEL_TEST_DOCUMENT:JSON.stringify(document)}});
   assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout.trim());
@@ -69,4 +71,9 @@ test('tall hall columns occlude perception while low furnishing remains below th
   assert.ok(column,'a high column has an explicit visibility footprint');
   const a={x:column.x-column.halfX-.1,z:column.z},b={x:column.x+column.halfX+.1,z:column.z};
   assert.equal(blackoutSight(game,a,b),false);
+});
+
+test('an edited power panel survives the actual game module loading path',()=>{
+ const d=new HotelEditorState().document;d.facilities.powerPanels[0].x=15;assert(validateHotelDocument(d).valid);const result=runtime(d);
+ assert.equal(result.error,null);assert.equal(result.sectors.length,4);assert.equal(result.sectors[0].x,15);assert.equal(result.sectors[0].sector,'reception');assert.equal(result.blackout,true);
 });

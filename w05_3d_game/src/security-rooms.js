@@ -89,14 +89,14 @@ export function buildSecurityRooms(v,world,unit){
     const lamp=new THREE.Group();lamp.name=`${room.id}-ceiling-light`;lamp.position.copy(world((b.minX+b.maxX)/2,(b.minZ+b.maxZ)/2,v.ceilingHeight-.047));fixed.add(lamp);ceilingBowl(v,lamp,.25);
     // A local copy allows these bulbs to follow hotel power without changing
     // the emergency room's shared bowl material.
-    lamp.traverse(object=>{if(object.material?.isMeshBasicMaterial){object.material=object.material.clone();lampGlasses.push({material:object.material,color:object.material.color.clone()});}});
+    lamp.traverse(object=>{if(object.material?.isMeshBasicMaterial){object.material=object.material.clone();lampGlasses.push({point:{x:(b.minX+b.maxX)/2,z:(b.minZ+b.maxZ)/2},material:object.material,color:object.material.color.clone()});}});
     const light=world((b.minX+b.maxX)/2,(b.minZ+b.maxZ)/2,v.ceilingHeight-.19);Object.assign(light,{blackoutOnly:true,guestRoom:room.id,strength:27,reach:6,angle:1.39,penumbra:.35,warmth:room.room==='201'?0xe8e4cf:0xffdfb5,isCorner:true});v.lampPositions.push(light);
   }
   const audit=batchStaticMeshes(fixed);fixed.updateMatrixWorld(true);fixed.traverse(object=>{object.matrixAutoUpdate=false;object.matrixWorldAutoUpdate=false;});
   let lastPower=null;
   function update(game){
     const state=game.blackout,visual=blackoutVisualLighting(state);group.visible=Boolean(state);if(!state)return;
-    if(lastPower!==visual.key){owned.forEach((m,index)=>m.envMapIntensity=baseEnv[index]*(visual.powerOn?1:visual.blackout?.005:.09));lampGlasses.forEach(({material,color})=>material.color.copy(color).multiplyScalar(visual.powerOn?1:visual.blackout?0:.006));lastPower=visual.key;}
+    if(lastPower!==visual.key){owned.forEach((m,index)=>m.envMapIntensity=baseEnv[index]*(visual.powerOn?1:visual.blackout?.005:.09));lampGlasses.forEach(({point,material,color})=>material.color.copy(color).multiplyScalar(blackoutVisualLighting(state,point).powerOn?1:visual.blackout?0:.006));lastPower=visual.key;}
     for(const door of doorSets){const status=state.roomDoors?.[door.id],progress=Math.max(0,Math.min(1,status?.progress??1)),impact=doorBashPose(status),damage=Math.max(0,Math.min(1,status?.bashProgress??0));for(const leaf of door.leaves){leaf.object.rotation.y=leaf.side*((1-progress)*Math.PI/2+impact.angle);leaf.object.position.z=impact.depth;leaf.stress.visible=damage>.1;leaf.stress.scale.y=Math.max(.001,damage);}
       if(progress!==door.progress||impact.depth!==door.impact){for(const light of v.lights??[])if(light.intensity>0&&light.position.distanceToSquared(door.gate.position)<64)light.shadow.needsUpdate=true;if(v.blackoutView?.flashlight.intensity>0)v.blackoutView.flashlight.shadow.needsUpdate=true;door.progress=progress;door.impact=impact.depth;}
     }

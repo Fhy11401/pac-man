@@ -25,3 +25,10 @@ test('the strike cue fires once on the animation clock across frame rates and re
   }
  }
 });
+
+test('skipping clears cinematic overrides and starts exactly one call without restoring hotel power',()=>{
+ let calls=0;const events=[],game={blackout:{powerOn:false}},intro=new BlackoutIntro({onEvent:e=>events.push(e),onComplete:g=>{assert.equal(g,game);calls++;}});
+ intro.start(game);intro.update(.1);assert.equal(intro.skip(),true);
+ assert.equal(game.blackout.introShot,undefined);assert.equal(game.blackout.introLighting,undefined);assert.equal(game.blackout.powerOn,false);
+ const count=events.length;intro.update(100);assert.equal(intro.skip(),false);assert.equal(calls,1);assert.equal(events.length,count);
+});

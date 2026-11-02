@@ -125,13 +125,16 @@ export class Sound {
     if(name==='mains-fail')this.stopEnemyVoice();
     if(name==='backup-ready'){this.noiseBurst(.25,0,.13,1100,this.effects);this.tone(115,.25,'triangle',.12);this.tone(660,.18,'sine',.07,.2);}
     if(name==='phone-a'||name==='phone-b'){this.tone(697,.09,'sine',.035);this.tone(1209,.09,'sine',.025);}
-    if(name==='power-on'){
+    if(name==='power-on'||name==='sector-on'){
       this.noiseBurst(.23,0,.15,600,this.effects,0,120);
       this.tone(55,.8,'triangle',.065,.12,0,this.effects,110);
       [330,440,554].forEach((f,i)=>this.tone(f,.35,'sine',.065,.3+i*.15));
     }
     if(name==='hide'||name==='unhide')this.noiseBurst(.14,0,.3,430,this.effects,0,180);
     if(name==='flashlight'||name==='nightvision'||name==='monitor')this.noiseBurst(.055,0,.055,1600,this.effects,0,500);
+    if(name==='item-pickup')this.tone(780,.15,'sine',.09);
+    if(name==='item-strike'){this.noiseBurst(.35,0,.16,760,this.effects,0,90);this.tone(85,.22,'triangle',.20,0,0,this.effects,34);this.noiseBurst(.20,0,.25,300,this.effects,.2,60);}
+    if(name==='enemy-recovered')this.noiseBurst(.10,0,.3,420,this.effects,0,120);
     if(name==='battery')this.tone(660,.19,'sine',.07,0,0,this.effects,880);
     if(name==='battery-empty'){this.tone(220,.2,'triangle',.05);this.tone(165,.25,'triangle',.05,.23);}
     if(name==='boards-break'){
@@ -167,7 +170,7 @@ export class Sound {
         this.bashSounds.delete(room.id);
       }
     }
-    const repairStep=Math.floor(state.repairProgress*16);
+    const repairStep=Math.floor((state.circuits?.[state.activeRepair]??state.repairProgress)*16);
     if(repairStep>this.repairStep&&repairStep<16){this.noiseBurst(.055,0,.1,1100,this.effects,0,400);this.tone(85,.09,'triangle',.025);}
     this.repairStep=repairStep;
   }

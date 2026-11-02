@@ -1,3 +1,4 @@
+import {POWER_SECTORS,circuitProgress,nextPowerPanel,powerSignature} from './power-grid.js';
 import {MAP, MAP_WIDTH, MAP_HEIGHT, SHARDS, EXIT, ENTRY_GATE, isInSafeRoom, edgeIsOpen} from './world.js';
 import {DEFAULT_TUNING} from './tuning.js';
 import {BLACKOUT_LAYOUT} from './blackout-layout.js';
@@ -28,7 +29,7 @@ export function drawMap(canvas,game,yaw=-Math.PI/2,zoom=true,localScale=DEFAULT_
   const c=canvas.getContext('2d'),w=canvas.width,t=mapTransform(w,game.player,yaw,zoom,localScale),u=t.unit;
   const blackout=game.blackout;
   const baseSignature=[w,Boolean(blackout),blackout?'':game.collected.size,blackout?'':game.entryOpened].join('|');
-  const state=blackout?[blackout.powerOn,blackout.hasLeftRoom,blackout.doorClosed,Number(blackout.doorProgress??0).toFixed(2),...BLACKOUT_LAYOUT.phones.map((_,i)=>Boolean(blackout.phones?.[i]?.remaining))].join('|'):'';
+  const state=blackout?[powerSignature(blackout),blackout.powerOn,blackout.hasLeftRoom,blackout.doorClosed,Number(blackout.doorProgress??0).toFixed(2),...BLACKOUT_LAYOUT.phones.map((_,i)=>Boolean(blackout.phones?.[i]?.remaining))].join('|'):'';
   let cache=cacheByCanvas.get(canvas);
   if(cache?.game===game&&cache.baseSignature===baseSignature&&cache.state===state&&cache.x===game.player.x&&cache.z===game.player.z&&cache.yaw===yaw&&cache.zoom===zoom&&cache.localScale===localScale)return;
   if(!cache||cache.game!==game||cache.baseSignature!==baseSignature){
@@ -62,8 +63,8 @@ export function drawMap(canvas,game,yaw=-Math.PI/2,zoom=true,localScale=DEFAULT_
   if(blackout){
     c.save();c.beginPath();c.rect(7,7,w-14,w-14);c.clip();
     const needsNewReturn=blackout.powerOn&&blackout.hasLeftRoom===false;
-    const objective=needsNewReturn?{...ENTRY_GATE.outside,id:'return-threshold'}:blackout.powerOn?BLACKOUT_LAYOUT.console:BLACKOUT_LAYOUT.power,edge=mapObjectiveEdge(objective,t),objectiveLabel=needsNewReturn?'门':blackout.powerOn?'C':'P';
-    const markers=[{point:BLACKOUT_LAYOUT.power,label:'P',color:blackout.powerOn?'#b9cbb9':'#c7ad78'},...BLACKOUT_LAYOUT.phones.map((point,i)=>({point,label:String(i+1),color:blackout.phones?.[i]?.remaining>0?'#e2c478':'#c4bea9'})),...BLACKOUT_LAYOUT.lockers.map(point=>({point,label:'L',color:'#a1b0a6'})),{point:BLACKOUT_LAYOUT.console,label:'C',color:'#c8bf9e'}];
+    const objective=needsNewReturn?{...ENTRY_GATE.outside,id:'return-threshold'}:blackout.powerOn?BLACKOUT_LAYOUT.console:nextPowerPanel(blackout,game.player),edge=mapObjectiveEdge(objective,t),objectiveLabel=needsNewReturn?'门':blackout.powerOn?'C':`P${objective.number}`;
+    const markers=[...POWER_SECTORS.map(point=>({point,label:`P${point.number}`,color:circuitProgress(blackout,point)>=1?'#8eb997':'#c7ad78'})),...BLACKOUT_LAYOUT.phones.map((point,i)=>({point,label:String(i+1),color:blackout.phones?.[i]?.remaining>0?'#e2c478':'#c4bea9'})),...BLACKOUT_LAYOUT.lockers.map(point=>({point,label:'L',color:'#a1b0a6'})),{point:BLACKOUT_LAYOUT.console,label:'C',color:'#c8bf9e'}];
     if(needsNewReturn)markers.push({point:objective,label:objectiveLabel,color:'#d8bb7f'});
     for(const marker of markers){
       if(edge&&marker.point.id===objective.id)continue;

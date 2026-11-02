@@ -11,9 +11,9 @@ test('night clock reports elapsed real minutes without implying a six AM win',()
 test('office door controls work only inside the control room and retain obstruction checks',()=>{const g=createGame({}, {mode:'blackout'});g.enemyDelay=999;tick(g,{x:0,z:0,action:'office-door'},.1);assert.equal(g.blackout.doorClosed,false);g.player={...ENEMY_START};g.enemy={...START};tick(g,{x:0,z:0,action:'office-door'},.1);assert.equal(g.blackout.doorClosed,false);g.player={...START};g.enemy={...ENTRY_GATE};const events=tick(g,{x:0,z:0,action:'office-door'},.1);assert(events.includes('door-blocked'));assert.equal(g.blackout.doorClosed,false);});
 test('audio controls affect music-independent master and effects buses and keep pause mute',()=>{const values={},bus=key=>({gain:{setTargetAtTime:v=>values[key]=v}}),s={ctx:{currentTime:1},master:bus('master'),effects:bus('effects'),threat:bus('threat'),paused:false,playing:true,muted:false};Sound.prototype.setMixVolumes.call(s,.5,.25);assert.equal(values.master,.4);assert.equal(values.effects,.3);assert.equal(values.threat,.3);s.paused=true;s.playing=false;Sound.prototype.setMixVolumes.call(s,.8,.8);assert.equal(values.effects,0);assert.equal(values.threat,0);s.muted=true;Sound.prototype.setMixVolumes.call(s,1,1);assert.equal(values.master,0);});
 
-test('opening and call states hide and disable the office controls, then restore them',async()=>{
- const {NightUI}=await import('../src/night-ui.js');const nodes={},buttons=[{},{},{}];
- const ui={by:id=>nodes[id]??=( {setAttribute(){},querySelectorAll(){return buttons;}} )};const game=createGame({}, {mode:'blackout'});
- for(const block of [{intro:true},{callBusy:true},{active:false}]){NightUI.prototype.update.call(ui,game,{active:true,...block});assert.equal(nodes['office-controls'].hidden,true);assert.equal(nodes['office-controls'].inert,true);assert(buttons.every(b=>b.disabled));}
- NightUI.prototype.update.call(ui,game,{active:true});assert.equal(nodes['office-controls'].hidden,false);assert.equal(nodes['office-controls'].inert,false);assert(buttons.every(b=>!b.disabled));
+test('opening and call states suppress the gameplay readout',async()=>{
+ const {NightUI}=await import('../src/night-ui.js');const nodes={};
+ const ui={by:id=>nodes[id]??={}};const game=createGame({}, {mode:'blackout'});
+ for(const block of [{intro:true},{callBusy:true},{active:false}]){NightUI.prototype.update.call(ui,game,{active:true,...block});assert.equal(nodes['night-readout'].hidden,true);}
+ NightUI.prototype.update.call(ui,game,{active:true});assert.equal(nodes['night-readout'].hidden,false);
 });

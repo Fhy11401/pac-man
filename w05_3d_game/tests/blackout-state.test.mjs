@@ -1,3 +1,4 @@
+import {POWER_SECTORS} from '../src/power-grid.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGame,tick,blocked,getBlackoutInteraction,blackoutSight} from '../src/core.js';
@@ -175,10 +176,10 @@ test('interaction requires local facing and visibility, not merely a nearby room
 test('repair can be paused and resumed, and does not advance by tapping E',()=>{
   const g=game();g.player={...L.power};press(g,'interact',0);
   assert.equal(g.blackout.repairProgress,0);
-  step(g,2,{...still,heading:0,interact:true});assert.ok(Math.abs(g.blackout.repairProgress-.25)<1e-7);
+  step(g,2,{...still,heading:0,interact:true});assert.ok(Math.abs(g.blackout.circuits[L.power.id]-.25)<1e-7);
   const saved=g.blackout.repairProgress;step(g,1);assert.equal(g.blackout.repairProgress,saved);
   const events=step(g,6,{...still,heading:0,interact:true});
-  assert.equal(g.blackout.powerOn,true);assert.equal(g.blackout.repairProgress,1);assert.equal(events.filter(e=>e==='power-on').length,1);
+  assert.equal(g.blackout.powerOn,false);assert.equal(g.blackout.circuits[L.power.id],1);assert.equal(events.filter(e=>e==='sector-on').length,1);
   assert.equal(g.phase,'playing');assert.equal(g.collected.size,0);
 });
 
@@ -200,7 +201,7 @@ test('batteries are finite pickups; death retains repair and charge without an a
 
 test('the full repair-return-close objective uses ordinary movement and cannot win with an enemy indoors',()=>{
   const g=game();walk(g,ENTRY_GATE.inside);press(g,'interact',0);step(g,.5);
-  walk(g,L.power);step(g,R.repairSeconds,{...still,heading:0,interact:true});
+  for(const panel of POWER_SECTORS){walk(g,panel);step(g,R.repairSeconds,{...still,heading:Math.atan2(-panel.wall.x,-panel.wall.z),interact:true});}
   assert.equal(g.blackout.powerOn,true);assert.equal(g.phase,'playing');assert.equal(g.blackout.hasLeftRoom,true);
   walk(g,ENTRY_GATE.inside);press(g,'interact',0);step(g,.5);
   assert.equal(g.phase,'playing','closing from the connector is not arriving in the control room');

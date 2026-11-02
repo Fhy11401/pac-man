@@ -1,13 +1,14 @@
+import {resolvePowerLayout,materializePowerPanels} from './power-layout.js';
 import {cloneHotelDocument,createDefaultHotelDocument,validateHotelDocument} from './hotel-document.js';
 
 export class HotelEditorState {
-  constructor(document=createDefaultHotelDocument()){this.document=cloneHotelDocument(document);this.undoStack=[];this.redoStack=[];this.before=null;}
+  constructor(document=createDefaultHotelDocument()){this.document=materializePowerPanels(cloneHotelDocument(document));this.undoStack=[];this.redoStack=[];this.before=null;}
   begin(){this.before??=JSON.stringify(this.document);}
-  commit(){const before=this.before;this.before=null;if(before&&before!==JSON.stringify(this.document)){this.undoStack.push(before);if(this.undoStack.length>60)this.undoStack.shift();this.redoStack=[];return true;}return false;}
+  commit(){if(this.before)materializePowerPanels(this.document);const before=this.before;this.before=null;if(before&&before!==JSON.stringify(this.document)){this.undoStack.push(before);if(this.undoStack.length>60)this.undoStack.shift();this.redoStack=[];return true;}return false;}
   change(fn){this.begin();try{fn(this.document);return this.commit();}catch(error){this.document=JSON.parse(this.before);this.before=null;throw error;}}
   undo(){this.commit();if(!this.undoStack.length)return false;this.redoStack.push(JSON.stringify(this.document));this.document=JSON.parse(this.undoStack.pop());return true;}
   redo(){this.commit();if(!this.redoStack.length)return false;this.undoStack.push(JSON.stringify(this.document));this.document=JSON.parse(this.redoStack.pop());return true;}
-  replace(document){const next=cloneHotelDocument(document);this.commit();return this.change(()=>{this.document=next;});}
+  replace(document){const next=materializePowerPanels(cloneHotelDocument(document));this.commit();return this.change(()=>{this.document=next;});}
   validate(){return validateHotelDocument(this.document);}
 }
 export function setHotelCell(doc,x,z,value){
@@ -31,7 +32,7 @@ export function resizeHotel(doc,width,height){
 export function hotelEntities(doc){
   const f=doc.facilities;
   return [{kind:'start',id:'start',label:'出生点',value:doc.map.start},{kind:'enemy',id:'enemy',label:'敌人起点',value:doc.map.enemy},
-    {kind:'power',id:f.power.id,label:'配电箱',value:f.power},{kind:'console',id:f.console.id,label:'监控台',value:f.console},
+    ...resolvePowerLayout(doc).sectors.map(p=>({kind:'power',id:p.id,label:`P${p.number} · ${p.label}配电箱`,number:p.number,sector:p.sector,value:f.powerPanels?.find(v=>v.id===p.id)??p})),{kind:'console',id:f.console.id,label:'监控台',value:f.console},
     ...['phones','batteries','cameras','patrol','rooms','halls'].flatMap(kind=>f[kind].map((value,index)=>({kind,id:value.id??String(index),index,label:value.label??(kind==='rooms'?`客房 ${value.room}`:kind==='phones'?`电话 ${value.room}`:kind==='batteries'?'备用电池':kind==='patrol'?`巡逻点 ${index+1}`:value.id),value})))];
 }
 export function entityPosition(entity){const v=entity.value;return v.position??(v.bounds?{x:(v.bounds.minX+v.bounds.maxX)/2,z:(v.bounds.minZ+v.bounds.maxZ)/2}:v);}
@@ -51,6 +52,6 @@ export function moveHotelEntity(doc,entity,dx,dz){
     for(const key of ['minX','maxX'])v.bounds[key]+=dx;for(const key of ['minZ','maxZ'])v.bounds[key]+=dz;
     fillHotelRectangle(doc,{x:v.bounds.minX,z:v.bounds.minZ},{x:v.bounds.maxX,z:v.bounds.maxZ});
   }else if(v.position){v.position.x+=dx;v.position.z+=dz;v.target.x+=dx;v.target.z+=dz;}
-  else{v.x+=dx;v.z+=dz;}
+  else{v.x+=dx;v.z+=dz;if(entity.kind==='power'&&v.id===doc.facilities.power.id)Object.assign(doc.facilities.power,{x:v.x,z:v.z,wall:{...v.wall}});}
   return true;
 }

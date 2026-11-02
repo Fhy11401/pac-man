@@ -1,3 +1,4 @@
+import {useStick} from './room-items.js';
 import { MAP,START, ENEMY_START, EXIT, SHARDS, RULES, ENTRY_GATE, isInSafeRoom, distance, cell, isOpen, pathTo,wallInset,transitionWalls } from './world.js';
 import {MOVEMENT_KEYS} from './tuning.js';
 import {movementVelocity,slideMove,steerVelocity} from './movement.js';
@@ -28,7 +29,7 @@ export function createGame(tuning={},options={}) {
     collected: new Set(), lives: RULES.lives, phase: 'playing',
     elapsed: 0, respawn: 0, caught: 0, deaths: 0, events: [], enemyDelay: RULES.enemyDelay,entryOpened:false,entryBreakTime:0,
     moveSpeed: 0, sprinting: false, moveHeading:null, motionVelocity:{x:0,z:0},playerVelocity: { x: 0, z: 0 }, enemyVelocity: { x: 0, z: 0 } };
-  if(options.mode==='blackout')game.blackout=createBlackoutState();
+  if(options.mode==='blackout')game.blackout=createBlackoutState(options.random??Math.random);
   return game;
 }
 export function blocked(p, radius = RULES.playerRadius,width=RULES.corridorWidth) {
@@ -149,7 +150,7 @@ export function tick(game, input, dt) {
     movedX+=travel.at(-1).x-travel[0].x;movedZ+=travel.at(-1).z-travel[0].z;movedTime+=step;
     if(game.blackout){
       game.elapsed+=step;finishBlackoutStep(game,step);
-      if(blackoutShouldCatch(game)){loseLife(game);break;}
+      if(blackoutShouldCatch(game)&&!useStick(game,blackoutSight,true)){loseLife(game);break;}
       if(blackoutWon(game)){game.phase='won';game.events.push('won');break;}
       continue;
     }

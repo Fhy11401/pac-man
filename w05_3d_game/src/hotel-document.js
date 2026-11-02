@@ -1,3 +1,4 @@
+import {resolvePowerLayout} from './power-layout.js';
 import {HOTEL_DEFAULT_DOCUMENT} from './hotel-default-data.js';
 import {analyzeMap} from './map-analysis.js';
 
@@ -33,8 +34,9 @@ function mapDocument(raw){
 export function normalizeHotelDocument(raw){
   fields(raw,['format','version','name','map','facilities'],[],'酒店布局');
   if(raw.format!==HOTEL_DOCUMENT_FORMAT||raw.version!==HOTEL_DOCUMENT_VERSION)throw new TypeError('不支持此酒店布局格式或版本。');
-  const f=raw.facilities;fields(f,['power','phones','rooms','batteries','console','patrol','halls','cameras'],[],'酒店设施');
+  const f=raw.facilities;fields(f,['power','phones','rooms','batteries','console','patrol','halls','cameras'],['powerPanels'],'酒店设施');
   return{format:HOTEL_DOCUMENT_FORMAT,version:1,name:text(raw.name,'酒店名',80)||'未命名酒店',map:mapDocument(raw.map),facilities:{
+    ...(f.powerPanels===undefined?{}:{powerPanels:list(f.powerPanels,'分区配电箱',24).map(p=>{fields(p,['id','sector','x','z','wall'],[],'分区配电箱');const {sector,...site}=p;return{...fixture(site,'分区配电箱',{wall:true}),sector:text(sector,'供电区域',64)};})}),
     power:fixture(f.power,'配电箱',{wall:true}),console:fixture(f.console,'监控台',{wall:true}),
     phones:list(f.phones,'电话',8).map(p=>fixture(p,'电话',{wall:true,phone:true})),batteries:list(f.batteries,'电池').map(p=>fixture(p,'电池')),
     patrol:list(f.patrol,'巡逻点').map(p=>point(p,'巡逻点')),
@@ -77,8 +79,8 @@ export function validateHotelDocument(raw){
   const usable=(p,label)=>{if(!open(map,p)||!seen.has(key(p)))issue('facility-terrain',`${label}必须位于可到达的可走格。`,[p]);};
   const ids=new Set(),id=(value,label)=>{if(!/^[a-zA-Z0-9_-]{1,64}$/.test(value)||['__proto__','constructor','prototype'].includes(value)||ids.has(value))issue('facility-id',`${label} ID 无效或重复。`);ids.add(value);};
   const checkWall=(p,label)=>{usable(p,label);if(Math.abs(p.wall.x)+Math.abs(p.wall.z)!==1||!inMap({x:p.x+p.wall.x,z:p.z+p.wall.z})||map.tiles[p.z+p.wall.z]?.[p.x+p.wall.x]!=='#')issue('fixture-wall',`${label}朝向必须指向相邻实体墙。`,[p]);};
-  for(const [p,label] of [[f.power,'配电箱'],[f.console,'监控台'],...f.phones.map(p=>[p,'电话'])]){id(p.id,label);checkWall(p,label);}
-  if(safe(f.power))issue('power-room','配电箱应位于监控室外。',[f.power]);
+  for(const [p,label] of [...(f.powerPanels?[]:[[f.power,'配电箱']]),[f.console,'监控台'],...f.phones.map(p=>[p,'电话'])]){id(p.id,label);checkWall(p,label);}
+  if(!f.powerPanels&&safe(f.power))issue('power-room','配电箱应位于监控室外。',[f.power]);
   if(!inside(map.safeRoom,f.console))issue('console-room','监控台须位于监控室内。',[f.console]);
   for(const p of f.batteries){id(p.id,'电池');usable(p,'电池');}
   if(f.rooms.length!==2||f.phones.length!==2)issue('room-count','本版本需要两间客房和对应的两部电话。');
@@ -104,6 +106,19 @@ export function validateHotelDocument(raw){
     const h=f.halls[i];id(h.id,'大厅');rectangle(h.bounds,'大厅',3);
     if(overlap(h.bounds,map.safeRoom)||f.rooms.some(r=>overlap(h.bounds,r.bounds))||f.halls.slice(0,i).some(r=>overlap(h.bounds,r.bounds)))issue('region-overlap','大厅不能与客房、监控室或其他大厅重叠。');
   }
+  const power=resolvePowerLayout(document),sectors=f.halls.length?f.halls.map(h=>h.id):['hotel'];
+  if(f.powerPanels){
+    const assigned=new Set(),sites=new Set();
+    for(const p of f.powerPanels){
+      id(p.id,'分区配电箱');checkWall(p,'分区配电箱');
+      if(!sectors.includes(p.sector)||assigned.has(p.sector))issue('power-sector','每个供电区域须对应唯一配电箱。',[p]);assigned.add(p.sector);
+      if(sites.has(key(p))||[f.console,...f.phones,...f.batteries].some(other=>key(other)===key(p)))issue('power-overlap','配电箱不能与其他设施重叠。',[p]);sites.add(key(p));
+      if(safe(p)||f.rooms.some(r=>inside(r.bounds,p)))issue('power-room','分区配电箱须位于公共区域。',[p]);
+      if(power.sectorAt(p)?.sector!==p.sector)issue('power-location','配电箱必须放在其对应的供电区域内。',[p]);
+    }
+    if(sectors.some(id=>!assigned.has(id)))issue('power-missing','部分供电区域缺少配电箱。');
+  }
+  if(power.sectors.length!==sectors.length)issue('power-missing','供电区域缺少可达的墙面，无法放置配电箱。');
   if(!f.patrol.length)issue('patrol-empty','至少需要一个巡逻点。');
   for(const p of f.patrol){usable(p,'巡逻点');if(safe(p)||f.rooms.some(r=>inside(r.bounds,p)))issue('patrol-room','巡逻点须在公共区域。',[p]);}
   if(!f.cameras.length)issue('camera-empty','至少需要一台摄像头。');

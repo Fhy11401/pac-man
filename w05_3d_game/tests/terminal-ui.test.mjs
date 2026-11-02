@@ -26,6 +26,8 @@ function fakeDOM(){
   const ids=new Set([...(html+securityMapNavigation().svg).matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]));
   class Element{
     constructor(){this.style={};this.dataset={};this.attributes={};this.children=[];this.listeners={};this.textContent='';this.classList={toggle(){},remove(){}};}
+    querySelector(selector){this.selected??={};return this.selected[selector]??=new Element();}
+    remove(){}
     setAttribute(name,value){this.attributes[name]=value;}
     append(...nodes){this.children.push(...nodes);}replaceChildren(...nodes){this.children=[...nodes];}
     addEventListener(type,fn){this.listeners[type]=fn;}removeEventListener(type){delete this.listeners[type];}focus(){}
@@ -38,7 +40,7 @@ test('opening power readout follows mains, blackout, backup, then the repair obj
   const previous=globalThis.document,{elements,document}=fakeDOM();globalThis.document=document;let ui;
   try{
     ui=new BlackoutUI({onAction(){}});const game=createGame({}, {mode:'blackout'});
-    for(const [stage,title,power] of [['mains','夜班开始','ON'],['blackout','主电源中断','OFF'],['backup','备用电源在线','AUX'],[null,'修复酒店供电','OFF']]){
+    for(const [stage,title,power] of [['mains','夜班开始','ON'],['blackout','主电源中断','OFF'],['backup','备用电源在线','AUX'],[null,'恢复分区供电 · 0 / 4','0 / 4']]){
       game.blackout.introLighting=stage;ui.update(game,{active:true});
       assert.equal(elements['blackout-objective'].textContent,title);assert.equal(elements['blackout-power-state'].textContent,power);assert.equal(elements.collected.textContent,power);
       assert.equal(game.blackout.powerOn,false,'the cinematic display must not complete the repair');

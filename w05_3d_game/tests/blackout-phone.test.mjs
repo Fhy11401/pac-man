@@ -34,7 +34,7 @@ for(const fps of [15,30,60,144])test(`remote monitoring connects in simulation t
   const position={...g.player},heading=.72,events=[];
   events.push(...tick(g,{x:1,z:0,run:true,heading,action:'monitor'},1/fps));
   assert.equal(g.blackout.monitor,false);assert.ok(g.blackout.monitorConnecting>0);assert.equal(g.blackout.nightVision,false);
-  while(g.elapsed<1.2-1e-9)events.push(...tick(g,{x:1,z:0,run:true,heading},1/fps));
+  while(g.elapsed+1/fps<MONITOR_CONNECT_SECONDS-1e-9)events.push(...tick(g,{x:1,z:0,run:true,heading},1/fps));
   assert.equal(g.blackout.monitor,false);
   while(g.elapsed<MONITOR_CONNECT_SECONDS+.02)events.push(...tick(g,{x:1,z:0,run:true,heading},1/fps));
   assert.equal(g.blackout.monitor,true);assert.equal(g.blackout.monitorConnecting,0);assert.deepEqual(g.player,position);

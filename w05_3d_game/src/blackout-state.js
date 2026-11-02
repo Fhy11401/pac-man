@@ -1,3 +1,5 @@
+import {ITEMS,createRoomItems,roomItemPoint,exchangeRoomItem,useStick,stepKnockdown} from './room-items.js';
+import {POWER_SECTORS,circuitProgress,isAreaPowered} from './power-grid.js';
 import {BLACKOUT_LAYOUT as L,BLACKOUT_RULES as R} from './blackout-layout.js';
 import {ENTRY_GATE,SAFE_ROOM,RULES,START_YAW,cell,key,neighbors,distance,isOpen,isInSafeRoom,pathTo,gateWall} from './world.js';
 import {hasMazeSight} from './visibility.js';
@@ -76,15 +78,16 @@ function setTarget(game,point,mode){
   const b=game.blackout;
   // Finish the already selected corridor edge before planning a new target.
   // Repeated footsteps must not pull an off-centre enemy back to the previous cell.
-  b.enemyTarget=copy(point);b.enemyMode=mode;
+  b.enemyTarget=copy(point);b.enemyMode=mode;if(mode!=='investigate')b.investigationKind=null;
 }
-export function createBlackoutState(){
+export function createBlackoutState(random=Math.random){
   return {
-    powerOn:false,repairProgress:0,repairing:false,doorClosed:true,doorProgress:1,
+    inventory:null,roomItems:createRoomItems(random),knockdown:null,enemySpeedScale:1,strikeAt:-Infinity,
+    powerOn:false,circuits:Object.fromEntries(POWER_SECTORS.map(p=>[p.id,0])),activeRepair:null,lastRestored:null,repairProgress:0,repairing:false,doorClosed:true,doorProgress:1,
     nightVision:false,flashlight:false,battery:R.batterySeconds,hidden:null,bedHide:null,bedTransition:null,bedSerial:0,knownBed:null,phoneOpen:false,monitorConnecting:0,monitor:false,
     phones:L.phones.map(()=>({remaining:0,cooldown:0,pulse:0})),batteries:new Set(),
     roomDoors:Object.fromEntries((L.rooms??[]).map(room=>[room.id,{closed:true,progress:1,hold:0,mode:null,wait:0,enemyWait:0,releaseGrace:0,bashing:false,bashTime:0,bashProgress:0,bashPulse:0,bashBeat:0}])),activeRoomDoor:null,
-    enemyMode:'patrol',enemyHeading:-Math.PI/2,enemyTarget:copy(L.patrol[0]),
+    enemyMode:'patrol',investigationKind:null,enemyHeading:-Math.PI/2,enemyTarget:copy(L.patrol[0]),
     lastKnown:null,lastHeard:null,lastLight:null,knownLocker:null,searchRemaining:0,patrolIndex:0,
     hasLeftRoom:false,heading:START_YAW,senseClock:0,stepClock:0,repairClock:0,
     sounds:[],soundSerial:0,lastSoundId:0,enemyRoomSearch:null,phoneTasks:[],phoneSerial:0,lastBashDoorId:null,
@@ -165,6 +168,7 @@ function updateBedTransition(game,dt){
   }
 }
 function startRoomSearchTask(game,room,reason,point=room.door.inside){
+  game.blackout.investigationKind=reason==='phone'?'phone':null;
   game.blackout.enemyRoomSearch={roomId:room.id,reason,phase:'approach',points:[],index:0,lookRemaining:0};
   setTarget(game,point,reason==='witness'?'chase':'investigate');
 }
@@ -176,7 +180,7 @@ function startNextPhoneTask(game){
 }
 function hearPhoneCall(game,index){
   const b=game.blackout,phone=L.phones[index],room=L.rooms.find(r=>r.room===phone?.room);
-  if(!room||b.enemyMode==='chase'||b.enemyMode==='locker'||b.knownBed||blackoutCanSeePlayer(game))return;
+  if(!room||b.enemyMode==='investigate'&&b.investigationKind==='repair'||b.enemyMode==='chase'||b.enemyMode==='locker'||b.knownBed||blackoutCanSeePlayer(game))return;
   // A dial is one hotel-wide clue, not a recurring audio pulse. Finish the
   // current room inspection before handling the other room's pending call.
   if(b.enemyRoomSearch?.roomId===room.id&&b.enemyRoomSearch.reason==='phone'||b.phoneTasks.some(t=>t.roomId===room.id))return;
@@ -185,19 +189,23 @@ function hearPhoneCall(game,index){
 }
 export function getBlackoutInteraction(game,heading=game.blackout?.heading){
   const b=game.blackout;if(!b||game.phase!=='playing')return null;
-  if(b.monitor||b.monitorConnecting>0)return{id:'console',kind:'monitor',label:b.monitor?'关闭监控':'取消监控连接',point:copy(game.player)};
+  if(b.monitor||b.monitorConnecting>0)return{id:'console',kind:'monitor',label:b.monitor?'关闭监控':'放下手机',point:copy(game.player)};
   if(b.phoneOpen)return null;
   if(b.bedHide)return{id:b.hidden,kind:'bed',label:b.bedTransition?'正在移动…':'离开床底',point:copy(b.bedHide.exitPoint),...(b.bedTransition?{progress:b.bedTransition.progress}:{})};
   if(b.hidden)return{id:b.hidden,kind:'locker',label:'离开储物柜',point:copy(game.player)};
   const choices=[];
+  for(const item of b.roomItems)if(item.kind){
+    const point=roomItemPoint(item,game.tuning.corridorWidth);
+    if(point&&canReach(game,point,heading,.72))choices.push({id:item.id,kind:'item',label:`${b.inventory?'交换 / Swap':'拾取 / Pick up'} · ${ITEMS[item.kind].name}`,note:ITEMS[item.kind].description,point});
+  }
   for(const spot of bedSpots(game))if(reachableBed(game,spot,heading))choices.push({id:spot.id,kind:'bed',label:'躲到床底',point:copy(spot.target)});
   // The door's own collider must not hide its handle on either side.
   if(distance(game.player,ENTRY_GATE)<=.76&&hasMazeSight(game.player,ENTRY_GATE,game.tuning.corridorWidth)&&facing(heading,game.player,ENTRY_GATE,.05)){
     choices.push({id:'door',kind:'door',label:b.doorClosed?'打开机械门':'关闭机械门',point:copy(ENTRY_GATE)});
   }
-  for(const [fixture,kind,label] of [[L.power,'power',b.powerOn?'电力已恢复':'按住 E 维修配电箱'],[L.console,'monitor','打开监控'],...L.lockers.map(p=>[p,'locker','进入储物柜'])]){
+  for(const [fixture,kind,label] of [...POWER_SECTORS.map(p=>[p,'power',`${p.number} · ${p.label} · ${circuitProgress(b,p)>=1?'供电已恢复':'按住 E 维修'}`]),[L.console,'monitor','打开监控'],...L.lockers.map(p=>[p,'locker','进入储物柜'])]){
     const point=fixturePoint(fixture);
-    if(canReach(game,point,heading))choices.push({id:fixture.id,kind,label,point,...(kind==='power'?{progress:b.repairProgress}:{})});
+    if(canReach(game,point,heading))choices.push({id:fixture.id,kind,label,point,...(kind==='power'?{progress:circuitProgress(b,fixture),complete:circuitProgress(b,fixture)>=1}:{})});
   }
   for(const battery of L.batteries)if(!b.batteries.has(battery.id)&&canReach(game,battery,heading)){
     choices.push({id:battery.id,kind:'battery',label:b.battery>=R.batterySeconds-EPS?'夜视电池已满 · 无需补充':`补充夜视电池（+${R.batteryPickup} 秒）`,point:copy(battery)});
@@ -212,13 +220,13 @@ export function blackoutCanSeePlayer(game){
   const b=game.blackout;if(!b||b.hidden&&(!b.bedHide||bedConcealed(game)))return false;
   const d=distance(game.enemy,game.player);
   if(d>R.sightRange||!blackoutSight(game,game.enemy,game.player)||!facing(b.enemyHeading+Math.PI,game.enemy,game.player,.42))return false;
-  const lit=b.powerOn||isInSafeRoom(game.player);
+  const lit=isAreaPowered(b,game.player);
   const beam=b.flashlight&&d<=R.flashlightRange&&facing(b.heading,game.player,game.enemy,Math.cos(Math.PI/6));
   return lit||beam;
 }
 function visibleFlashlightClue(game){
   const b=game.blackout;
-  if(b.powerOn||!b.flashlight||b.hidden||b.monitor)return null;
+  if(isAreaPowered(b,game.player)||!b.flashlight||b.hidden||b.monitor)return null;
   const direction={x:-Math.sin(b.heading),z:-Math.cos(b.heading)},pointAt=t=>({x:game.player.x+direction.x*t,z:game.player.z+direction.z*t});
   let previous=0,best=null,bestDistance=Infinity;
   // Five ground/light-hit samples per perception update. The first obstruction
@@ -318,9 +326,13 @@ function operateLocker(game,id){
   game.events.push('hide');noise(game,game.player,1.5,'locker');
   if(witnessed){b.knownLocker=id;b.lastKnown=copy(game.player);setTarget(game,game.player,'locker');}
 }
+export function closeBlackoutMonitor(game){
+  const b=game.blackout;if(!b||!b.monitor&&!b.monitorConnecting)return false;
+  cancelRoomHold(game);b.monitor=false;b.monitorConnecting=0;b.phoneOpen=false;return true;
+}
 function operateMonitor(game){
   const b=game.blackout;
-  if(b.monitor||b.monitorConnecting>0){b.monitor=false;b.monitorConnecting=0;b.phoneOpen=false;game.events.push('monitor');return;}
+  if(closeBlackoutMonitor(game)){game.events.push('monitor');return;}
   b.phoneOpen=false;b.monitorConnecting=MONITOR_CONNECT_SECONDS;b.flashlight=false;b.nightVision=false;game.events.push('monitor-connect');
 }
 function handleAction(game,action,interaction){
@@ -345,8 +357,10 @@ function handleAction(game,action,interaction){
     game.events.push(action);return;
   }
   if(b.phoneOpen)return;
+  if(action==='use-item'){useStick(game,blackoutSight);return;}
   if(action==='door-press'||action==='door-release'){roomDoorAction(game,action,interaction);return;}
   if(action!=='interact'||!interaction)return;
+  if(interaction.kind==='item')exchangeRoomItem(game,interaction.id);
   if(interaction.kind==='door')operateDoor(game);
   if(interaction.kind==='locker')operateLocker(game,interaction.id);
   if(interaction.kind==='bed')operateBed(game,interaction.id);
@@ -376,14 +390,17 @@ export function beginBlackoutStep(game,input,dt){
       phone.remaining=Math.max(0,phone.remaining-dt);
     }
   }
-  const repairing=Boolean(!b.powerOn&&!b.hidden&&!b.phoneOpen&&!b.monitor&&!b.monitorConnecting&&input.interact&&interaction?.kind==='power');
+  const panel=POWER_SECTORS.find(p=>p.id===interaction?.id);
+  const repairing=Boolean(panel&&circuitProgress(b,panel)<1&&!b.powerOn&&!b.hidden&&!b.phoneOpen&&!b.monitor&&!b.monitorConnecting&&input.interact&&interaction?.kind==='power');
   if(repairing){
-    if(!b.repairing)game.events.push('repair');
-    b.repairProgress=Math.min(1,b.repairProgress+dt/R.repairSeconds);b.repairClock-=dt;
-    if(b.repairClock<=0){noise(game,L.power,8.5,'repair');b.repairClock=.55;}
-    if(b.repairProgress>=1-EPS){b.repairProgress=1;b.powerOn=true;game.events.push('power-on');}
+    if(!b.repairing||b.activeRepair!==panel.id){game.events.push('repair');b.repairClock=0;}
+    b.activeRepair=panel.id;b.circuits[panel.id]=Math.min(1,b.circuits[panel.id]+dt/R.repairSeconds);b.repairClock-=dt;
+    if(b.repairClock<=0){noise(game,panel,0,'repair');b.repairClock=.55;}
+    if(b.circuits[panel.id]>=1-EPS){b.circuits[panel.id]=1;b.lastRestored=panel.id;game.events.push('sector-on');}
+    b.repairProgress=POWER_SECTORS.reduce((sum,p)=>sum+b.circuits[p.id],0)/POWER_SECTORS.length;
+    if(POWER_SECTORS.every(p=>b.circuits[p.id]>=1)){b.powerOn=true;game.events.push('power-on');}
   }
-  b.repairing=repairing&&!b.powerOn;
+  b.repairing=repairing&&!b.powerOn&&circuitProgress(b,panel)<1;
   if(b.nightVision){
     b.battery=Math.max(0,b.battery-dt);
     if(b.battery<=0){b.nightVision=false;game.events.push('battery-empty');}
@@ -413,12 +430,17 @@ function perceive(game,dt){
   let heard=null,score=-Infinity;
   for(const sound of b.sounds){
     if(sound.id<=b.lastSoundId)continue;
+    if(sound.kind==='repair'){heard=sound;score=Infinity;continue;}
     const heardDistance=acousticDistance(game,game.enemy,sound.point,sound.range);
     if(heardDistance<=sound.range&&sound.range-heardDistance>score){heard=sound;score=sound.range-heardDistance;}
   }
   b.lastSoundId=b.soundSerial;
   if(!visible&&b.enemyMode!=='locker'){
-    if(b.knownBed||b.enemyRoomSearch)return;
+    if(b.knownBed||b.enemyRoomSearch?.reason==='witness')return;
+    if(heard?.kind==='repair'&&b.enemyMode!=='chase'){
+      b.enemyRoomSearch=null;b.phoneTasks=[];b.investigationKind='repair';b.lastHeard={point:copy(heard.point),kind:heard.kind};setTarget(game,heard.point,'investigate');return;
+    }
+    if(b.enemyRoomSearch)return;
     if(b.enemyMode==='chase'){
       if(heard?.kind==='footstep'){b.lastHeard={point:copy(heard.point),kind:heard.kind};setTarget(game,heard.point,'chase');}
       return;
@@ -426,10 +448,10 @@ function perceive(game,dt){
     const light=visibleFlashlightClue(game);
     if(light){
       const moved=!b.lastLight||distance(light.point,b.lastLight.point)>.4;
-      b.lastLight=light;
+      b.lastLight=light;b.investigationKind='light';
       if(b.enemyMode!=='search'||moved)setTarget(game,light.approach,'investigate');
     }else if(heard){
-      b.lastHeard={point:copy(heard.point),kind:heard.kind};setTarget(game,heard.point,'investigate');
+      b.investigationKind=heard.kind;b.lastHeard={point:copy(heard.point),kind:heard.kind};setTarget(game,heard.point,'investigate');
     }
   }
 }
@@ -472,7 +494,7 @@ function reachedTarget(game){
     // An observed hiding place remains a clue, not permanent knowledge of its occupant.
     // Inspecting an empty cabinet must return the enemy to a bounded search.
     b.knownLocker=null;
-    b.enemyMode='search';b.enemyTarget=null;b.searchRemaining=R.searchSeconds;game.enemyNext=null;
+    b.enemyMode='search';b.investigationKind=null;b.enemyTarget=null;b.searchRemaining=R.searchSeconds;game.enemyNext=null;
   }
 }
 function moveBlackoutEnemy(game,dt){
@@ -513,7 +535,8 @@ function moveBlackoutEnemy(game,dt){
     }else if(!obstruction||!b.enemyRoomSearch)reachedTarget(game);
     game.enemyVelocity={x:0,z:0};return;
   }
-  let remaining=game.tuning.enemySpeed*(b.enemyMode==='chase'||b.enemyMode==='locker'?1:.7)*dt;
+  const speed=b.powerOn?game.tuning.escapeEnemySpeed:(b.enemyMode==='chase'||b.enemyMode==='locker'||b.enemyMode==='investigate'&&['repair','phone'].includes(b.investigationKind)&&(!b.enemyRoomSearch||b.enemyRoomSearch.phase==='approach')?game.tuning.enemySpeed:game.tuning.enemyPatrolSpeed);
+  let remaining=speed*b.enemySpeedScale*dt;
   while(remaining>EPS){
     if(!game.enemyNext){
       points=route(game,game.enemy,effectiveTarget);
@@ -540,11 +563,11 @@ export function finishBlackoutStep(game,dt){
   if(!b.hidden&&!b.phoneOpen&&!b.monitor&&!b.monitorConnecting&&game.sprinting&&Math.hypot(game.playerVelocity.x,game.playerVelocity.z)>.1&&b.stepClock<=0){
     noise(game,game.player,R.hearingRun,'footstep');b.stepClock=.3;
   }
-  perceive(game,dt);moveBlackoutEnemy(game,dt);
+  if(!stepKnockdown(game,dt)){perceive(game,dt);moveBlackoutEnemy(game,dt);}
   b.sounds=b.sounds.filter(sound=>(sound.remaining-=dt)>0);
 }
 export function blackoutShouldCatch(game){
-  const b=game.blackout;
+  const b=game.blackout;if(b.knockdown)return false;
   if(b.bedHide&&b.knownBed===b.hidden&&b.enemyTarget&&distance(game.enemy,b.enemyTarget)<.22&&distance(game.enemy,b.bedHide.target)<.9&&blackoutSight(game,game.enemy,b.bedHide.target))return true;
   const exposed=!b.hidden||b.knownLocker===b.hidden||(b.bedHide&&!bedConcealed(game));
   return exposed&&distance(game.player,game.enemy)<game.tuning.playerRadius+RULES.enemyRadius&&blackoutSight(game,game.player,game.enemy);
@@ -560,7 +583,7 @@ export function blackoutCaught(game){
 }
 export function resetBlackoutAfterDeath(game){
   const b=game.blackout;
-  blackoutCaught(game);b.doorClosed=true;b.doorProgress=1;b.hasLeftRoom=false;b.knownLocker=null;
+  blackoutCaught(game);b.knockdown=null;b.doorClosed=true;b.doorProgress=1;b.hasLeftRoom=false;b.knownLocker=null;
   b.lastKnown=null;b.lastHeard=null;b.lastLight=null;b.enemyMode='patrol';b.patrolIndex=0;b.enemyTarget=copy(L.patrol[0]);b.enemyHeading=-Math.PI/2;
   b.sounds=[];b.lastSoundId=b.soundSerial;b.senseClock=0;b.stepClock=0;b.heading=START_YAW;
   for(const phone of b.phones)phone.remaining=0;
