@@ -27,7 +27,8 @@ export function canUseStick(game,sight,passive=false){
 export function useStick(game,sight,passive=false){
   if(!canUseStick(game,sight,passive))return false;
   const b=game.blackout;
-  b.monitor=false;b.monitorConnecting=0;b.phoneOpen=false;
+  if(b.officeBash)b.officeBash.bashing=false;
+  b.noteOpen=false;b.chaseLine=null;b.monitor=false;b.monitorConnecting=0;b.phoneOpen=false;
   b.inventory=null;b.knockdown={elapsed:0,heading:b.enemyHeading};b.enemySpeedScale*=.9;
   b.strikeAt=game.elapsed;b.lastItemEvent=passive?'自动防卫 / AUTO DEFENSE':'命中 / HIT';
   b.enemyMode='search';b.searchRemaining=4;b.enemyTarget=null;b.investigationKind=null;

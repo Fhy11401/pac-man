@@ -92,13 +92,12 @@ test('phone calls reach the hotel but never override an active visual or remembe
   assert.equal(distant.blackout.enemyRoomSearch.roomId,L.rooms[0].id);
 });
 
-test('losing perception visits the last seen position, searches, then resumes patrol',()=>{
+test('entering darkness on the same corridor keeps the acquired pursuit line',()=>{
   const g=game();g.enemy={x:18,z:10};g.player={x:18,z:8};g.blackout.enemyHeading=Math.PI;
   press(g,'flashlight',Math.PI);assert.equal(g.blackout.enemyMode,'chase');
-  const last={...g.blackout.lastKnown};press(g,'flashlight',Math.PI);
-  g.player={x:18,z:6};g.enemyDelay=0;step(g,1.2);
-  assert.equal(g.blackout.enemyMode,'search');assert.ok(distance(g.enemy,last)<.04);assert.deepEqual(g.blackout.lastKnown,last);
-  step(g,R.searchSeconds+.2);assert.equal(g.blackout.enemyMode,'patrol');
+  press(g,'flashlight',Math.PI);g.player={x:18,z:6};step(g,2);
+  assert.equal(g.blackout.enemyMode,'chase');assert.deepEqual(g.blackout.lastKnown,g.player);
+  assert.deepEqual(g.blackout.enemyTarget,g.player);assert.equal(g.blackout.chaseLine.missingSince,null);
 });
 
 test('continuous moving footstep targets do not pull the enemy back to cell centres',()=>{
@@ -208,4 +207,17 @@ test('the full repair-return-close objective uses ordinary movement and cannot w
   step(g,.5,{x:0,z:1,heading:Math.PI});assert.equal(g.phase,'won');assert.equal(g.collected.size,0);
   const unsafe=game();unsafe.blackout.powerOn=true;unsafe.blackout.hasLeftRoom=true;unsafe.enemy={x:15,z:15};
   tick(unsafe,still,.1);assert.equal(unsafe.phase,'playing','locking the enemy inside is not a safe return');
+});
+
+test('audible sprint footsteps trigger running investigation with the permanent speed modifier',()=>{
+  for(const modifier of [1,.9]){
+    const g=game();g.enemyDelay=0;g.enemy={x:18,z:11};g.player={x:18,z:8};g.blackout.enemyHeading=0;g.blackout.enemySpeedScale=modifier;
+    tick(g,{x:0,z:-1,heading:0,run:true},.1);
+    assert.equal(g.blackout.enemyMode,'investigate');assert.equal(g.blackout.investigationKind,'footstep');
+    assert.equal(g.blackout.lastHeard.kind,'footstep');
+    const before={...g.enemy},target={...g.blackout.enemyTarget},dt=1/120;
+    tick(g,still,dt);
+    assert(Math.abs(distance(before,g.enemy)-g.tuning.enemySpeed*modifier*dt)<1e-7,'movement uses running speed, including the stick penalty');
+    assert.deepEqual(g.blackout.enemyTarget,target,'a heard footstep remains a discrete sound location');
+  }
 });

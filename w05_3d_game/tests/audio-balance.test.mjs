@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {proximityMix,Sound} from '../src/audio.js';
+import {proximityMix,Sound,quietPreparation} from '../src/audio.js';
 import {DistanceMusicState,MusicDirector} from '../src/music.js';
 
 test('heartbeat and enemy footsteps use exactly the same distance and wall attenuation',()=>{
@@ -20,4 +20,11 @@ test('chase onset writes gain now rather than scheduling a proximity crossfade',
 test('sound forwards real pursuit state and emits equal envelope gains for nearby footsteps and heartbeats',()=>{
  const sounds=[],s={playing:true,enemyStride:1.64,heartClock:0,voiceClock:999,music:{update:(...args)=>sounds.push(['music',...args])},step:(gain,pan,enemy)=>sounds.push(['step',gain,enemy]),heartbeat:gain=>sounds.push(['heart',gain])};
  Sound.prototype.update.call(s,.02,0,3,0,false,false,1,0,true);assert.equal(sounds.find(x=>x[0]==='music').at(-1),true);assert.equal(sounds.find(x=>x[0]==='step')[1],sounds.find(x=>x[0]==='heart')[1]);
+});
+
+test('opening the office once enables distance-based threat audio even after closing it again',()=>{
+ const g={player:{x:16,z:16},enemy:{x:16,z:12},blackout:{enemyReleased:false,doorProgress:1}};
+ assert(quietPreparation(g));g.blackout.enemyReleased=true;assert.equal(quietPreparation(g),false);
+ assert(proximityMix(4,true).footGain>0);assert(proximityMix(4,true).heartGain>0);
+ g.blackout.doorProgress=0;assert.equal(quietPreparation(g),false);g.blackout.doorProgress=1;assert.equal(quietPreparation(g),false);
 });

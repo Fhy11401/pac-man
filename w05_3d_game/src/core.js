@@ -29,7 +29,7 @@ export function createGame(tuning={},options={}) {
     collected: new Set(), lives: RULES.lives, phase: 'playing',
     elapsed: 0, respawn: 0, caught: 0, deaths: 0, events: [], enemyDelay: RULES.enemyDelay,entryOpened:false,entryBreakTime:0,
     moveSpeed: 0, sprinting: false, moveHeading:null, motionVelocity:{x:0,z:0},playerVelocity: { x: 0, z: 0 }, enemyVelocity: { x: 0, z: 0 } };
-  if(options.mode==='blackout')game.blackout=createBlackoutState(options.random??Math.random);
+  if(options.mode==='blackout')game.blackout=createBlackoutState(options.random??Math.random,options);
   return game;
 }
 export function blocked(p, radius = RULES.playerRadius,width=RULES.corridorWidth) {

@@ -2,7 +2,7 @@ import {setScareMouth,scarePerformance,scareTargetHeight} from './scare-performa
 import {RoomItemView,applyKnockdown} from './room-item-view.js';
 import {setThreatExposure} from './threat-lighting.js';
 import {faceReveal,OPENING_REVEAL_AT,DEATH_REVEAL_AT,DEATH_LUNGE_SECONDS} from './scare-timing.js';
-import {AttendantMotion,poseAttendant,smoothAttendantHeading,trackAttendantGaze} from './attendant-motion.js';
+import {AttendantMotion,poseAttendant,poseDoorBash,smoothAttendantHeading,trackAttendantGaze} from './attendant-motion.js';
 import {buildOpeningScene} from './opening-scene.js';
 import {OPENING_STRIKE_AT} from './opening-timing.js';
 import {DEFAULT_TUNING} from './tuning.js';
@@ -287,7 +287,7 @@ export class WorldView {
   render(game,yaw,pitch,time,dt=1/60,active=true,motionScale=1){
     if(this.security.active&&(!game.blackout||!active||game.phase!=='playing'))this.setSecurityMonitor(false);
     if(this.randomDoors)this.randomDoors.visible=!game.blackout;
-    if(this.lastGame!==game){this.lastGame=game;this.shardFade.fill(1);this.enemyHeading=-Math.PI/2;this.playerMotion.reset();this.lastViewYaw=null;this.enemyMotion?.reset();if(this.enemyRig)this.enemyRig.gaze=null;this.enemyTurnSpeed=0;this.bedEyeHeight=this.eyeHeight;}
+    if(this.lastGame!==game){this.lastGame=game;this.security?.resetAim();this.shardFade.fill(1);this.enemyHeading=-Math.PI/2;this.playerMotion.reset();this.lastViewYaw=null;this.enemyMotion?.reset();if(this.enemyRig)this.enemyRig.gaze=null;this.enemyTurnSpeed=0;this.bedEyeHeight=this.eyeHeight;}
     if(!game.blackout)this.safeRoom.update(game,dt);
     const speed=Math.hypot(game.playerVelocity.x,game.playerVelocity.z);
     const turnRate=angularTurnRate(this.lastViewYaw,yaw,dt);this.lastViewYaw=active&&game.phase==='playing'?yaw:null;
@@ -308,7 +308,8 @@ export class WorldView {
     }
     this.enemy.visible=!openingMonitor&&Boolean(game.blackout||game.entryOpened)&&(game.phase!=='caught'||RULES.caughtSeconds-game.caught<SCARE_TURN_SECONDS);
     this.enemy.position.copy(world(game.enemy.x,game.enemy.z));this.enemy.rotation.y=this.enemyHeading;const gait=(this.enemyMotion??=new AttendantMotion()).update(game.phase==='playing'?es*UNIT/this.enemy.scale.z:0,dt,active,game.blackout?.enemyMode==='chase'||game.phase==='caught'?1:0);poseAttendant(this.enemyRig??{body:this.enemyBody,head:this.enemyHead,limbs:this.enemyLimbs},gait);
-    if(!openingMonitor&&!game.blackout?.knockdown){const chasing=game.phase==='playing'&&(game.blackout?game.blackout.enemyMode==='chase':game.entryOpened);trackAttendantGaze(this.enemyRig,chasing?this.camera.position:null,dt,active);}
+    if(!openingMonitor&&!game.blackout?.knockdown){const chasing=game.phase==='playing'&&game.blackout?.chaseLine?.missingSince==null&&(game.blackout?game.blackout.enemyMode==='chase':game.entryOpened);trackAttendantGaze(this.enemyRig,chasing?this.camera.position:null,dt,active);}
+    if(game.blackout?.officeBash?.bashing&&!game.blackout?.knockdown)poseDoorBash(this.enemyRig,game.blackout.officeBash.bashTime);
     applyKnockdown(this.enemyRig??{root:this.enemy,body:this.enemyBody,limbs:this.enemyLimbs},game.blackout?.knockdown);
     this.camera.updateMatrixWorld(true);this.roomItemView?.update(game,this.camera,active&&!openingMonitor);
     const friendly=Boolean(this.motionTuning.friendlyMode),warning=!game.blackout?.knockdown&&!openingMonitor&&active&&game.phase==='playing'&&!blackoutVisualLighting(game.blackout).blackout&&(friendly||!game.blackout&&game.entryOpened&&!isInSafeRoom(game.player));
@@ -319,10 +320,11 @@ export class WorldView {
     // Keep one stable fixture pool rather than switching all shadow maps twice per frame.
     if(game.blackout?.introShot==='monitor')this.updateLampPool(game,dt,this.openingScene.camera,'opening');
     if(active)this.blackoutView.controlRoom?.updateFeeds(game,dt);
+    if(this.security.active)this.security.updateAim(this.scene,dt,this.enemyRig);
     const renderCamera=this.security.active?this.security.camera:this.camera;
     if(game.blackout?.introShot!=='monitor')this.updateLampPool(game,dt,renderCamera,this.security.active?this.security.selected.id:null);
     this.lights.forEach((light,i)=>{const dummy=this.dummy;dummy.position.copy(light.position);dummy.position.y+=.08;dummy.quaternion.copy(renderCamera.quaternion);dummy.scale.setScalar(light.visible&&light.intensity>6?.72:0);dummy.updateMatrix();this.lampHalos.setMatrixAt(i,dummy.matrix);});this.lampHalos.instanceMatrix.needsUpdate=true;
-    if(this.security.active){const visual=blackoutVisualLighting(game.blackout,this.security.selected.position);if(this.security.shouldRender(dt,visual.powerOn))this.security.draw(this.scene,{powerOn:visual.powerOn,baseExposure:.96*this.motionTuning.brightness,contactStrength:this.motionTuning.contactShadows??.85});}
+    if(this.security.active){const visual=blackoutVisualLighting(game.blackout,this.security.selected.position);if(this.security.shouldRender(dt,visual.powerOn)){this.security.draw(this.scene,{ambientLight:this.ambientLight,hemisphereLight:this.hemisphereLight,powerOn:visual.powerOn,baseExposure:.96*this.motionTuning.brightness,contactStrength:this.motionTuning.contactShadows??.85});this.security.observeEnemy(this.scene,this.enemyRig,game);}}
     else{const sensor=this.film.finish?.uniforms.securityInfrared,previous=sensor?.value;this.film.render(this.scene,this.camera,()=>this.drawScare(game,time),game.phase==='caught'?0:this.motionTuning.contactShadows??.85,{mosaic:friendly&&game.phase==='caught'});if(sensor)sensor.value=previous;if(!openingMonitor&&active&&game.phase==='playing'&&this.motionTuning.enemyXray)this.enemyXray?.draw(this.renderer,this.camera,this.enemy);}
   }
 }

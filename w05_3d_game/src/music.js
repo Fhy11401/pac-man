@@ -42,7 +42,7 @@ export function prepareScore(){
 
 export class MusicDirector {
   constructor(context,output,prepared){
-    this.ctx=context;this.state=new MusicState();this.keys=STEMS;this.loaded=false;this.active=false;this.offset=0;this.startedAt=0;this.sources=[];this.buffers={};this.volume=.325;
+    this.ctx=context;this.state=new MusicState();this.keys=STEMS;this.loaded=false;this.active=false;this.offset=0;this.startedAt=0;this.sources=[];this.buffers={};this.volume=.1625;
     this.bus=context.createGain();this.bus.gain.value=0;this.bus.connect(output);
     this.gains=Object.fromEntries(STEMS.map(key=>{const node=context.createGain();node.gain.value=key==='exploration'?.48:0;node.connect(this.bus);return[key,node];}));
     this.ready=prepared.then(async score=>{

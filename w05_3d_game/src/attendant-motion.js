@@ -87,3 +87,9 @@ export function trackAttendantGaze(model,target,dt,active=true){
  model.head.quaternion.copy(model.body.getWorldQuaternion(gazeParent).invert()).multiply(model.gaze);
  neckAnchor.set(0,-.18,-.02).multiply(model.head.scale).applyQuaternion(model.head.quaternion);model.head.position.set(0,1.46,.006).sub(neckAnchor);
 }
+
+export function poseDoorBash(model,time){
+ if(!model)return;const strike=Math.max(0,Math.cos(time*Math.PI*4));
+ model.body.rotation.x+=.06+strike*.10;
+ for(const limb of model.limbs)if(!limb.leg){limb.node.rotation.x=-1.3-strike*.35;limb.node.rotation.z=limb.side*.12;if(limb.elbow)limb.elbow.rotation.x=-.75+strike*.6;}
+}

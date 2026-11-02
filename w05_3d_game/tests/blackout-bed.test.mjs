@@ -1,3 +1,4 @@
+import {sectorAt} from '../src/power-grid.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGame,tick,getBlackoutInteraction,blackoutSight} from '../src/core.js';
@@ -50,7 +51,7 @@ test('bed interactions require the same room, a nearby clear side, and facing th
 });
 
 test('an unobserved bed occupant stays concealed and can use phone, night vision and remote CCTV',()=>{
-  const {g,spot,room}=setup();enter(g,spot);g.blackout.powerOn=true;
+  const {g,spot,room}=setup();enter(g,spot);g.blackout.circuits[sectorAt(g.player).id]=1;
   open(g,room);g.enemy={...room.door.inside};g.blackout.enemyHeading=heading(g.enemy,g.player)+Math.PI;
   assert.equal(blackoutCanSeePlayer(g),false);
   tick(g,{...still,action:'nightvision'},.1);const charge=g.blackout.battery;step(g,.3);assert.ok(g.blackout.battery<charge);
@@ -101,7 +102,7 @@ test('an unobserved bed occupant survives a phone inspection; the enemy walks, l
 });
 
 test('witnessed bed entry is investigated and caught; phone calls cannot divert the known hiding place',()=>{
-  const {g,spot,room}=setup();open(g,room);g.enemy={...room.door.inside};g.blackout.enemyHeading=heading(g.enemy,g.player)+Math.PI;g.blackout.powerOn=true;
+  const {g,spot,room}=setup();open(g,room);g.enemy={...room.door.inside};g.blackout.enemyHeading=heading(g.enemy,g.player)+Math.PI;g.blackout.circuits[sectorAt(g.player).id]=1;
   assert.equal(blackoutCanSeePlayer(g),true);enter(g,spot);assert.equal(g.blackout.knownBed,spot.id);
   tick(g,{...still,action:'phone-b'},.1);assert.equal(g.blackout.phoneTasks.length,0);assert.equal(g.blackout.enemyRoomSearch.reason,'witness');
   g.enemyDelay=0;step(g,1);assert.equal(g.phase,'caught');assert.equal(g.lives,2);assert.equal(g.blackout.bedHide,null);
@@ -110,7 +111,7 @@ test('witnessed bed entry is investigated and caught; phone calls cannot divert 
 });
 
 test('seeing someone enter a room does not reveal an unseen crawl beneath the bed behind its closed door',()=>{
-  const {g,spot,room}=setup();g.player={...room.door.inside};open(g,room);g.enemy={...room.door.outside};g.blackout.enemyHeading=Math.PI/2;g.blackout.powerOn=true;
+  const {g,spot,room}=setup();g.player={...room.door.inside};open(g,room);g.enemy={...room.door.outside};g.blackout.enemyHeading=Math.PI/2;g.blackout.circuits[sectorAt(g.player).id]=1;
   tick(g,still,.1);assert.equal(g.blackout.enemyMode,'chase');assert.equal(g.blackout.enemyRoomSearch.reason,'witness');
   g.blackout.roomDoors[room.id].closed=true;g.blackout.roomDoors[room.id].progress=1;g.player={...spot.approaches[0]};enter(g,spot);
   assert.equal(g.blackout.knownBed,null);tick(g,{...still,action:'phone-b'},.1);assert.equal(g.blackout.phoneTasks.length,0);

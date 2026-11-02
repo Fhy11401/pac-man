@@ -15,3 +15,11 @@ test('nine televisions face the seat and remain below the ceiling across room wi
     assert.equal(panels.find(p=>p.channel===0).x,0,'story feed is in the middle');
   }
 });
+
+test('the note table has its own collider, clear of the monitor desk and operator chair',()=>{
+ for(const width of [1.8,2.4,3]){
+  const l=controlRoomLayout(width),table=l.walls.find(w=>w.id==='property-table');assert(table);
+  assert.equal(table.x,l.notePoint.x);assert.equal(table.z,l.notePoint.z);
+  for(const other of l.walls.filter(w=>w!==table))assert(Math.abs(table.x-other.x)>table.halfX+other.halfX||Math.abs(table.z-other.z)>table.halfZ+other.halfZ);
+ }
+});

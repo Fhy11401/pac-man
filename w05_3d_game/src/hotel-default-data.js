@@ -14,17 +14,18 @@ const halls=[
 ];
 for(const {bounds:b} of halls)line(b.minX,b.minZ,b.maxX,b.maxZ);
 const camera=(id,label,x,z,tx,tz,description,fov=78)=>({id,label,description,position:{x,z,y:2.45},target:{x:tx,z:tz,y:1.3},fov});
+// Public-area coverage; CAM 01 and the opening hall remain unchanged.
 const cameras=[
-  camera('reception','接待大厅',11.15,7.2,16.4,10.5,'接待区与中央分流口',87),
-  camera('lounge','西侧休息厅',3.15,20.85,8.7,17.3,'休息厅与西翼交通口',87),
-  camera('banquet','宴会大厅',36.15,9.15,43.5,14.5,'宴会厅与东翼路线',86),
-  camera('atrium','东侧中庭',38.15,27.15,45.7,32.5,'中庭与南侧环廊',86),
-  camera('north-junction','北侧交通口',28,3.25,28,10,'北廊与东侧纵廊'),
-  camera('east-junction','东侧交通口',49,10.25,49,18,'东翼主通道与配电区'),
-  camera('south-junction','南侧交通口',28,30.75,28,22,'南廊与中央连接口'),
-  camera('west-junction','西侧交通口',3,10.25,3,16,'西翼与休息厅入口'),
-  camera('control-entry','监控室门外',13.15,13,17.8,13,'监控室前厅与机械门',82),
-  camera('banquet-entry','宴会厅西入口',35.8,13,28.3,13,'宴会厅连接通道与客房外廊',78),
+  camera("reception","接待大厅",11.15,7.2,16.4,10.5,"接待区与中央分流口",87),
+  camera("lounge","西侧休息厅",3,17,7.242641,21.242641,"休息厅与西翼交通口",86),
+  camera("banquet","宴会大厅",36,9,40.242641,13.242641,"宴会厅与东翼路线",86),
+  camera("atrium","东侧中庭",46,32,41.757359,27.757359,"中庭与南侧环廊",86),
+  camera("north-junction","北翼西段",12,3,18,3,"北侧长廊与中央北路",78),
+  camera("east-junction","北翼东段",29,3,35,3,"北侧长廊与东翼转接",78),
+  camera("south-junction","宴会厅南口",40,13,35.757359,17.242641,"宴会厅出口、客房外廊与东翼连接",86),
+  camera("west-junction","中央横廊",17,18,23,18,"中央主路与南侧环廊连接",78),
+  camera("control-entry","监控室门外",13.15,13,17.8,13,"监控室前厅与机械门",82),
+  camera("banquet-entry","接待厅东口",17,10,21.242641,5.757359,"接待厅东侧、201客房门口与北向通道",86),
 ].map((item,index)=>({...item,code:`CAM ${String(index+1).padStart(2,'0')}`}));
 
 export const HOTEL_DEFAULT_DOCUMENT=freeze({

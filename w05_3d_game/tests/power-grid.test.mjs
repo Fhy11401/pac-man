@@ -53,7 +53,7 @@ test('death retains each circuit and partial work, while a new shift resets them
 });
 test('actual blackout enemy motion uses independent patrol, chase and powered escape speeds',()=>{
  for(const [mode,powered,speed] of [['patrol',false,1.8],['investigate',false,1.8],['chase',false,2.4],['patrol',true,2.8],['chase',true,2.8]]){
-  const g=make();g.enemyDelay=0;g.enemy={x:28,z:3};g.blackout.enemyMode=mode;g.blackout.enemyTarget={x:49,z:3};g.blackout.senseClock=99;g.blackout.powerOn=powered;
+  const g=make();g.enemyDelay=0;g.enemy={x:28,z:3};g.blackout.enemyMode=mode;g.blackout.enemyTarget={x:49,z:3};g.blackout.senseClock=99;g.blackout.powerOn=powered;if(powered)g.player={x:49,z:3};
   tick(g,{x:0,z:0},.1);assert(Math.abs(g.enemy.x-28-speed*.1)<1e-8,`${mode}/${powered}`);
   assert.equal(g.tuning.playerSpeed,1.6);assert.equal(g.tuning.sprintSpeed,2.8);
  }

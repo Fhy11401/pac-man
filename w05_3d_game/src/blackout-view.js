@@ -230,7 +230,7 @@ export function buildBlackoutView(v,world,unit){
     // keep it stable while the sensor amplifies the actual corridor lighting.
     insideMaterial.emissiveIntensity=.4/exposureFactor;
     if(!enabled){flashlight.intensity=0;wasFlash=false;return;}
-    const door=clamp(state.doorProgress??1);leaf.position.y=(1-door)*(doorHeight+.055);
+    const door=clamp(state.doorProgress??1);leaf.position.y=(1-door)*(doorHeight+.055);leaf.position.z=state.officeBash?.bashing?Math.sin(state.officeBash.bashTime*70)*.012*Math.exp(-((state.officeBash.bashTime%.5)*14)):0;
     if(door!==lastDoor){for(const light of v.lights??[])if(light.position.distanceToSquared(gate.position)<70)light.shadow.needsUpdate=true;if(wasFlash)flashlight.shadow.needsUpdate=true;lastDoor=door;}
     for(const {site,progress,progressMaterial,powerLamp} of panels){
     const amount=clamp(circuitProgress(state,site));progress.scale.x=Math.max(.001,amount);progress.position.x=-(1-amount)*.196;

@@ -8,7 +8,7 @@ import {MAP_CENTER,CELL_SIZE,ENTRY_GATE,SAFE_ROOM,gateWall} from '../src/world.j
 import {createBlackoutState} from '../src/blackout-state.js';
 import {beveledBoxGeometry} from '../src/joinery.js';
 
-globalThis.document={createElement:()=>{const canvas={width:0,height:0,texts:[]};canvas.getContext=()=>({fillRect(){},strokeRect(){},fillText(text){canvas.texts.push(text);},beginPath(){},moveTo(){},lineTo(){},closePath(){},fill(){},arc(){},stroke(){}});return canvas;}};
+globalThis.document={createElement:()=>{const canvas={width:0,height:0,texts:[]};canvas.getContext=()=>({createRadialGradient:()=>({addColorStop(){}}),createLinearGradient:()=>({addColorStop(){}}),save(){},restore(){},translate(){},rotate(){},scale(){},fillRect(){},strokeRect(){},fillText(text){canvas.texts.push(text);},beginPath(){},moveTo(){},lineTo(){},closePath(){},fill(){},arc(){},stroke(){}});return canvas;}};
 const world=(x,z,y=0)=>new THREE.Vector3((x-MAP_CENTER.x)*CELL_SIZE,y,(z-MAP_CENTER.z)*CELL_SIZE);
 function fixture(width=BLACKOUT_RULES.corridorWidth,beforePrepare){
   const scene=new THREE.Scene(),mat=Object.fromEntries(['wood','brass','black','cloth','glow'].map(key=>[key,new THREE.MeshStandardMaterial()]));
@@ -139,4 +139,13 @@ test('television feeds are staggered, use the story camera only for its screen a
  const fullCount=draws.length;g.blackout.introTime=6.7;room.updateFeeds(g,1/60);assert.equal(draws.length,fullCount,'full-screen film pass needs no duplicate monitor render');
  const count=draws.length;g.blackout.introLighting='blackout';room.updateFeeds(g,.1);assert.equal(room.screenGroup.visible,false);assert.equal(draws.length,count);
  g.blackout.introLighting='backup';g.blackout.introShot='return';room.updateFeeds(g,.1);assert.equal(room.screenGroup.visible,true);assert.equal(target,null);assert.equal(v.renderer.shadowMap.autoUpdate,true);assert.equal(v.lampHalos.visible,true);
+});
+
+test('the paper rests entirely above its separate table surface without intersection',()=>{
+ const v=fixture(),note=v.blackoutView.controlRoom.note,p=new THREE.Vector3();
+ for(let i=0;i<note.geometry.attributes.position.count;i++){
+  p.fromBufferAttribute(note.geometry.attributes.position,i).applyMatrix4(note.matrix);
+  assert(p.y>.76+.045/2,'every curled paper vertex clears the tabletop');
+  assert(Math.abs(p.x)<.68/2&&Math.abs(p.z)<.60/2,'paper remains on its own table');
+ }
 });

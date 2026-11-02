@@ -24,10 +24,18 @@ export function securityMapNavigation(){
   // Nearby cameras share a corridor. Their labels separate without moving
   // the physical anchor: a short line connects each label to its camera.
   const offsets={'reception':{x:1.2},'room-201':{z:-.9},'room-202':{x:-.5},'entry-201':{z:.25},'south-west':{z:.2},'south-east':{z:.2},'west-hall':{z:-2.4},'east-hall':{z:-2.4}};
-  const buttons=SECURITY_CHANNELS.map(channel=>{
+  const seeds=SECURITY_CHANNELS.map(channel=>{
     const p=channel.position,o=offsets[channel.id]??{},x=Math.max(8,Math.min(92,(p.x+(o.x??0)-minX)/width*100)),y=Math.max(8,Math.min(92,(p.z+(o.z??0)-minZ)/height*100));
     return{id:channel.id,x,y,anchor:{x:p.x,z:p.z},label:{x:minX+x*width/100,z:minZ+y*height/100}};
   });
+  const placed=[];
+  for(const seed of [...seeds].sort((a,b)=>Math.min(a.x,100-a.x,a.y,100-a.y)-Math.min(b.x,100-b.x,b.y,100-b.y))){
+    const candidates=[{x:seed.x,y:seed.y}];for(let y=8;y<=92;y+=2)for(let x=8;x<=92;x+=2)candidates.push({x,y});
+    candidates.sort((a,b)=>(a.x-seed.x)**2+(a.y-seed.y)**2-((b.x-seed.x)**2+(b.y-seed.y)**2));
+    const at=candidates.find(p=>placed.every(other=>Math.abs(p.x-other.x)>=13.6||Math.abs(p.y-other.y)>=10.7))??candidates[0];
+    placed.push({...seed,...at,label:{x:minX+at.x*width/100,z:minZ+at.y*height/100}});
+  }
+  const buttons=seeds.map(seed=>placed.find(p=>p.id===seed.id));
   const connectors=buttons.map(p=>`<path d="M${p.anchor.x} ${p.anchor.z}L${p.label.x} ${p.label.z}"/>`).join('');
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minZ} ${width} ${height}" aria-hidden="true"><path d="${floors}" fill="#252525"/><path id="monitor-coverage" d=""/><path d="${walls}" fill="none" stroke="#ababab" stroke-width=".11"/><g fill="none" stroke="#a0a0a0" stroke-width=".09">${connectors}</g><path id="monitor-direction" d=""/></svg>`;
   return{minX,minZ,width,height,buttons,svg};
@@ -35,23 +43,26 @@ export function securityMapNavigation(){
 
 export function audibleDoorBash(game){
   const b=game.blackout;if(!b)return null;
-  return (L.rooms??[]).flatMap(room=>{
+  const candidates=(L.rooms??[]).flatMap(room=>{
     const door=b.roomDoors?.[room.id];if(!door?.bashing)return [];
     const distance=Math.hypot(game.player.x-room.door.x,game.player.z-room.door.z),sameRoom=b.bedHide?.roomId===room.id;
     return distance<=4.5||sameRoom?[{id:room.id,distance,sameRoom,progress:clamp(door.bashProgress)}]:[];
-  }).sort((a,c)=>a.distance-c.distance)[0]??null;
+  });
+  const d=Math.hypot(game.player.x-ENTRY_GATE.x,game.player.z-ENTRY_GATE.z);
+  if(b.officeBash?.bashing&&(isInSafeRoom(game.player)||d<=4.5))candidates.push({id:'entry-gate',office:true,distance:d,sameRoom:isInSafeRoom(game.player),progress:clamp(b.officeBash.bashProgress)});
+  return candidates.sort((a,c)=>a.distance-c.distance)[0]??null;
 }
 
 export class BlackoutUI{
   constructor({onAction}={}){
     this.inventoryHUD=new RoomItemHUD();
     this.onAction=onAction??(action=>window.dispatchEvent(new CustomEvent('blackout-action',{detail:action})));
-    this.el=Object.fromEntries(['blackout-hud','blackout-objective','blackout-objective-note','blackout-power-state','hud-night-clock','blackout-vision','blackout-battery','blackout-battery-fill','blackout-flashlight','blackout-phone-0','blackout-phone-1','blackout-interaction','blackout-interaction-key','blackout-interaction-label','blackout-interaction-note','blackout-repair','blackout-repair-fill','blackout-repair-value','blackout-hidden','blackout-door-warning','blackout-door-warning-label','blackout-door-warning-fill','blackout-door-warning-value','night-vision-layer','security-monitor','monitor-title','monitor-plan','monitor-floorplan','monitor-channels','monitor-feed','monitor-code','monitor-mode','monitor-time','monitor-close','phone-flashlight','phone-monitor','phone-time','phone-control-label','movement-sound','movement-sound-label','collected','exit-state'].map(id=>[id,document.getElementById(id)]));
+    this.el=Object.fromEntries(['blackout-hud','blackout-objective','blackout-objective-note','blackout-power-state','hud-night-clock','blackout-vision','blackout-battery','blackout-battery-fill','blackout-flashlight','blackout-phone-0','blackout-phone-1','blackout-interaction','blackout-interaction-key','blackout-interaction-label','blackout-interaction-note','blackout-repair','blackout-repair-fill','blackout-repair-value','blackout-hidden','blackout-door-warning','blackout-door-warning-label','blackout-door-warning-fill','blackout-door-warning-value','night-vision-layer','security-monitor','monitor-title','monitor-plan','monitor-floorplan','monitor-enemy-marker','monitor-channels','monitor-feed','monitor-code','monitor-mode','monitor-lock','monitor-time','monitor-close','phone-flashlight','phone-monitor','phone-time','phone-control-label','movement-sound','movement-sound-label','collected','exit-state'].map(id=>[id,document.getElementById(id)]));
     this.counter=document.querySelector('.tablet-counter');this.counterLabel=document.querySelector('.count-label');this.minimap=document.getElementById('minimap');this.flashlightState=document.getElementById('phone-flashlight-state');
     this.channel=0;this.active=false;this.monitorVisible=false;this.closePending=false;this.connecting=false;this.listeners=[];this.channelButtons=[];
     const listen=(node,type,fn)=>{node.addEventListener(type,fn);this.listeners.push(()=>node.removeEventListener(type,fn));};
     listen(this.el['monitor-close'],'click',()=>{if(this.monitorVisible&&!this.closePending){this.closePending=true;this.el['monitor-close'].disabled=true;this.onAction({type:'monitor-close'});}});
-    this.el['monitor-channels'].replaceChildren();const navigation=securityMapNavigation();
+    this.el['monitor-channels'].replaceChildren();const navigation=this.mapNavigation=securityMapNavigation();
     this.el['monitor-floorplan'].innerHTML=navigation.svg;this.el['monitor-plan'].style.aspectRatio=`${navigation.width} / ${navigation.height}`;
     this.coverage=new SecurityCoverage({tiles:MAP,center:MAP_CENTER,unit:CELL_SIZE,entryGate:ENTRY_GATE,rooms:L.rooms,barriers:MAP_DOCUMENT.barriers});
     this.coveragePath=document.getElementById('monitor-coverage');this.directionPath=document.getElementById('monitor-direction');this.lastCoverage=null;
@@ -75,11 +86,19 @@ export class BlackoutUI{
     this.el['monitor-feed'].dataset.channel=selected.id;
     this.el['monitor-feed'].setAttribute('aria-label',`${selected.label}实时监控画面。${selected.description}`);
     if(this.monitorVisible)this.updateCoverage();
+    if(changed)this.setEnemySighting(null);
     if(changed&&this.monitorVisible)this.onAction({type:'monitor-channel',channel:next});
+  }
+  setCameraPose(pose){this.cameraPose=pose;if(this.monitorVisible)this.updateCoverage();}
+  setEnemySighting(sighting){
+    const dot=this.el['monitor-enemy-marker'],selected=SECURITY_CHANNELS[this.channel],map=this.mapNavigation;
+    const visible=this.monitorVisible&&sighting?.game===this.game&&sighting?.channel===selected.id&&Number.isFinite(sighting.x)&&Number.isFinite(sighting.z);
+    dot.hidden=!visible;this.el['monitor-lock'].hidden=!visible||!sighting.tracking;if(!visible)return;
+    dot.style.left=`${(sighting.x-map.minX)/map.width*100}%`;dot.style.top=`${(sighting.z-map.minZ)/map.height*100}%`;
   }
   updateCoverage(){
     const game=this.game,b=game?.blackout;if(!b)return;
-    const selected=SECURITY_CHANNELS[this.channel],result=this.coverage.get(selected,{corridorWidth:game.tuning.corridorWidth,ceilingHeight:game.tuning.ceilingHeight??2.7,doorProgress:b.doorProgress,roomDoors:b.roomDoors});
+    const base=SECURITY_CHANNELS[this.channel],selected=this.cameraPose?.id===base.id?this.cameraPose:base,result=this.coverage.get(selected,{corridorWidth:game.tuning.corridorWidth,ceilingHeight:game.tuning.ceilingHeight??2.7,doorProgress:b.doorProgress,roomDoors:b.roomDoors});
     if(result===this.lastCoverage)return;this.lastCoverage=result;
     this.coveragePath.setAttribute('d',result.path);this.coveragePath.dataset.channel=selected.id;
     const p=selected.position,dx=selected.target.x-p.x,dz=selected.target.z-p.z,length=Math.hypot(dx,dz)||1,ux=dx/length,uz=dz/length;
@@ -88,7 +107,7 @@ export class BlackoutUI{
   hide(){
     this.inventoryHUD.hide();
     this.active=false;this.monitorVisible=false;this.closePending=false;this.connecting=false;
-    for(const id of ['blackout-hud','blackout-interaction','blackout-hidden','blackout-door-warning','night-vision-layer','security-monitor','movement-sound'])this.el[id].hidden=true;
+    for(const id of ['blackout-hud','blackout-interaction','blackout-hidden','blackout-door-warning','night-vision-layer','security-monitor','monitor-enemy-marker','monitor-lock','movement-sound'])this.el[id].hidden=true;
     this.el['security-monitor'].inert=true;this.el['monitor-close'].disabled=false;document.body.classList.remove('blackout-nightvision','blackout-hidden','blackout-monitor-open','blackout-phone-open');
     for(const id of ['phone-flashlight','phone-monitor']){this.el[id].disabled=true;this.el[id].tabIndex=-1;}
   }
@@ -107,7 +126,7 @@ export class BlackoutUI{
     for(const id of ['phone-flashlight','phone-monitor']){this.el[id].disabled=!phoneOpen;this.el[id].tabIndex=phoneOpen?0:-1;}
     this.el['phone-flashlight'].setAttribute('aria-pressed',String(Boolean(b.flashlight)));this.el['phone-monitor'].setAttribute('aria-pressed',String(monitoring||connecting));
     setText(this.flashlightState,b.flashlight?'已开启':'已关闭');
-    setText(this.el['phone-time'],monitorClock(game.elapsed).slice(0,5));setText(this.el['phone-control-label'],phoneOpen?(b.hidden?'返回观察':'返回行走'):'操作手机');
+    setText(this.el['phone-time'],monitorClock(game.elapsed).slice(0,5));setText(this.el['phone-control-label'],phoneOpen?(b.hidden?'返回观察':'返回行走'):'收起手机 / STOW');
     this.connecting=connecting;
     const noisy=Boolean(!b.hidden&&!b.bedTransition&&game.sprinting&&Math.hypot(game.playerVelocity?.x??0,game.playerVelocity?.z??0)>.1&&!phoneOpen&&!connecting&&!monitoring);
     this.el['movement-sound'].hidden=monitoring;this.el['movement-sound'].dataset.noisy=String(noisy);setText(this.el['movement-sound-label'],noisy?'脚步可被听见':'静步 / SILENT');
@@ -130,7 +149,7 @@ export class BlackoutUI{
     this.el['blackout-hidden'].hidden=!b.hidden||monitoring;
     const bash=audibleDoorBash(game);this.el['blackout-door-warning'].hidden=!bash;
     if(bash){
-      setText(this.el['blackout-door-warning-label'],bash.sameRoom?'房门正在遭到撞击':'近处传来砸门声');
+      setText(this.el['blackout-door-warning-label'],bash.office?'机械门正在遭到撞击':bash.sameRoom?'房门正在遭到撞击':'近处传来砸门声');
       this.el['blackout-door-warning-fill'].style.transform=`scaleX(${bash.progress})`;
       this.el['blackout-door-warning'].setAttribute('aria-valuenow',String(Math.round(bash.progress*100)));
       setText(this.el['blackout-door-warning-value'],`${Math.round(bash.progress*100)}%`);
@@ -140,7 +159,7 @@ export class BlackoutUI{
       const power=interaction.kind==='power',roomDoor=interaction.kind==='room-door',repair=power&&!interaction.complete,progress=clamp(interaction.progress??(power?b.repairProgress:0));
       setText(this.el['blackout-interaction-key'],interaction.kind==='monitor'?'M':'E');
       setText(this.el['blackout-interaction-label'],interaction.label);
-      setText(this.el['blackout-interaction-note'],interaction.kind==='item'?interaction.note:repair?'维修声：全酒店可闻 · 松开 E 保留进度':roomDoor?'快速操作会发声 · 按住可安静操作':power?(b.powerOn?'返回监控室，在门内合上机械门':'本区已供电 · 寻找其他 P 编号配电箱'):interaction.kind==='battery'?`补充 ${R.batteryPickup} 秒电量，满电时保留`:interaction.kind==='monitor'?'查看监控，危险不会暂停':interaction.kind==='bed'?(b.hidden?'Tab 操作手机 · M 查看监控':'按 E 藏身，避免在最后的住客眼前进入'):b.doorClosed?'打开后再通过':'合上门扇');
+      setText(this.el['blackout-interaction-note'],interaction.kind==='note'?'点击纸条或按 E 阅读':interaction.kind==='item'?interaction.note:repair?'维修声：全酒店可闻 · 松开 E 保留进度':roomDoor?'快速操作会发声 · 按住可安静操作':power?(b.powerOn?'返回监控室，在门内合上机械门':'本区已供电 · 寻找其他 P 编号配电箱'):interaction.kind==='battery'?`补充 ${R.batteryPickup} 秒电量，满电时保留`:interaction.kind==='monitor'?'查看监控，危险不会暂停':interaction.kind==='bed'?(b.hidden?'Space 收放手机 · M 查看监控':'按 E 藏身，避免在最后的住客眼前进入'):b.doorClosed?'打开后再通过':'合上门扇');
       this.el['blackout-repair'].hidden=!(repair||roomDoor);this.el['blackout-repair'].setAttribute('aria-label',roomDoor?'客房门静音操作进度':'配电箱维修进度');
       this.el['blackout-repair-fill'].style.transform=`scaleX(${progress})`;setText(this.el['blackout-repair-value'],roomDoor?`${Math.round(progress*100)}%`:`${(progress*R.repairSeconds).toFixed(1)} / ${R.repairSeconds}s`);
       this.el['blackout-repair'].setAttribute('aria-valuenow',String(Math.round(progress*100)));
@@ -154,7 +173,7 @@ export class BlackoutUI{
       this.el['security-monitor'].dataset.mode=channelPowered?'color':'infrared';
     }
     else{this.closePending=false;this.el['monitor-close'].disabled=false;}
-    this.monitorVisible=monitoring;
+    this.monitorVisible=monitoring;if(!monitoring)this.setEnemySighting(null);
   }
   destroy(){this.inventoryHUD.dispose();this.hide();this.coverage.clear();for(const remove of this.listeners)remove();this.listeners=[];}
 }

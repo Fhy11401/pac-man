@@ -35,7 +35,7 @@ test('public cameras observe all hall centres while preserving closed-room and c
 test('public cameras cannot look into guest rooms through their physical doors',()=>{
   const game=createGame({}, {mode:'blackout'}),controller=new SecurityCameras({renderer:{},film:{},home:null});
   for(const room of L.rooms){
-    const index=SECURITY_CHANNELS.findIndex(channel=>channel.id===(room.room==='201'?'reception':'banquet-entry')),camera=controller.cameras[index],origin=SECURITY_CHANNELS[index].position;
+    const index=SECURITY_CHANNELS.findIndex((channel,i)=>projects(controller.cameras[i],world(room.door.inside))&&hasMazeSight(channel.position,room.door.inside,game.tuning.corridorWidth)&&!blackoutSight(game,channel.position,room.door.inside));assert(index>=0,`a public camera overlooks the closed door of ${room.room}`);const camera=controller.cameras[index],origin=SECURITY_CHANNELS[index].position;
     const target=world(room.door.inside),bounds=roomDoorWall(room,game.tuning.corridorWidth);
     assert.ok(projects(camera,target));assert.equal(hasMazeSight(origin,room.door.inside,game.tuning.corridorWidth),true);
     assert.equal(blackoutSight(game,origin,room.door.inside),false);
@@ -96,10 +96,15 @@ test('the UI selects the shared world camera without reading enemy state, creati
       assert.equal(host.dataset.channel,SECURITY_CHANNELS[index].id);assert.deepEqual(host.children,[canvas]);
     }
     assert.equal(draws.length,SECURITY_CHANNELS.length);assert.deepEqual(game,before);
+    const marker=node('monitor-enemy-marker'),sighting={game:guarded,channel:SECURITY_CHANNELS[ui.channel].id,x:game.enemy.x,z:game.enemy.z};
+    ui.setEnemySighting(sighting);assert.equal(marker.hidden,false);assert.equal(marker.style.left,`${(game.enemy.x-ui.mapNavigation.minX)/ui.mapNavigation.width*100}%`);
+    ui.setEnemySighting(null);assert.equal(marker.hidden,true);ui.setEnemySighting({...sighting,game:{}});assert.equal(marker.hidden,true);
+    ui.setEnemySighting(sighting);ui.setMonitorChannel(0);assert.equal(marker.hidden,true);ui.setEnemySighting(sighting);assert.equal(marker.hidden,true);
+    ui.setEnemySighting({...sighting,channel:SECURITY_CHANNELS[0].id});assert.equal(marker.hidden,false);
     const calculations=ui.coverage.computations;ui.update(guarded,{active:true});ui.update(guarded,{active:true});
     assert.equal(ui.coverage.computations,calculations,'HUD updates reuse unchanged coverage');
     ui.update(guarded,{active:false});controller.set(false);
-    assert.equal(node('security-monitor').hidden,true);assert.deepEqual(home.children,[canvas,sibling]);assert.equal(host.children.length,0);assert.equal(ratio,1.5);assert.equal(restores,1);
+    assert.equal(marker.hidden,true);assert.equal(node('security-monitor').hidden,true);assert.deepEqual(home.children,[canvas,sibling]);assert.equal(host.children.length,0);assert.equal(ratio,1.5);assert.equal(restores,1);
     ui.update(guarded,{active:true});controller.set(true,ui.channel,host);controller.dispose();
     assert.deepEqual(home.children,[canvas,sibling]);assert.equal(host.children.length,0);assert.deepEqual(game,before);
   }finally{ui?.destroy();controller?.dispose();globalThis.document=previous;}

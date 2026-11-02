@@ -1,9 +1,10 @@
+import {drawPropertyNote} from './lost-property-note.js';
 import {openingPushProgress} from './opening-timing.js';
 import {POWER_SECTORS} from './power-grid.js';
 import * as THREE from '../vendor/three.module.js';
 import {MAP,MAP_WIDTH,MAP_HEIGHT,SAFE_ROOM,MAP_CENTER,isInSafeRoom} from './world.js';
 import {BLACKOUT_LAYOUT} from './blackout-layout.js';
-import {securityCameraPoses,SECURITY_CHANNELS} from './security-cameras.js';
+import {securityCameraPoses,SECURITY_CHANNELS,SECURITY_LIGHTING} from './security-cameras.js';
 import {controlRoomLayout,controlMonitorLayout} from './control-room-layout.js';
 
 function hotelPlan(){
@@ -63,7 +64,15 @@ export function buildControlRoom(v,world,unit,fixed,dynamic){
   box(.25,.005,.22,leather,.20,.826,.60);const mouse=v.mesh(new THREE.SphereGeometry(.04,12,8),keys,root);mouse.position.set(.20,.847,.60);mouse.scale.set(.7,.5,1.3);
   box(.20,.46,.40,edge,-layout.deskWidth/2+.42,.28,.40);for(let i=0;i<7;i++)box(.13,.005,.006,keys,-layout.deskWidth/2+.42,.17+i*.024,.604);
   cyl(.052,.10,paper,layout.deskWidth/2-.28,.875,.57);cyl(.043,.002,edge,layout.deskWidth/2-.28,.927,.57);
-  const note=box(.24,.003,.31,paper,.67,.827,.58);note.rotation.y=-.13;
+  const noteTable=new THREE.Group();noteTable.name='property-note-side-table';noteTable.position.set(layout.noteX,0,layout.noteZ);bank.add(noteTable);
+  box(.68,.045,.60,v.mat.wood,0,.76,0,noteTable);
+  for(const x of [-.265,.265])for(const z of [-.225,.225])box(.045,.73,.045,v.mat.wood,x,.365,z,noteTable);
+  box(.53,.08,.035,v.mat.wood,0,.64,-.24,noteTable);box(.035,.08,.46,v.mat.wood,-.27,.64,0,noteTable);box(.035,.08,.46,v.mat.wood,.27,.64,0,noteTable);
+  const noteCanvas=document.createElement('canvas'),noteTexture=new THREE.CanvasTexture(drawPropertyNote(noteCanvas,[]));noteTexture.colorSpace=THREE.SRGBColorSpace;noteTexture.anisotropy=Math.min(4,v.renderer.capabilities.getMaxAnisotropy());
+  const noteGeometry=new THREE.PlaneGeometry(.34,.425,8,12),vertices=noteGeometry.attributes.position;
+  for(let i=0;i<vertices.count;i++)vertices.setZ(i,.006*Math.pow(Math.abs(vertices.getX(i))/.17,4)+.003*Math.sin(vertices.getY(i)*20));noteGeometry.computeVertexNormals();
+  const note=v.mesh(noteGeometry,new THREE.MeshStandardMaterial({map:noteTexture,roughness:.96,metalness:0,side:THREE.DoubleSide}),noteTable);note.name='lost-property-paper';note.position.set(0,.790,0);note.rotation.set(-Math.PI/2,0,-.13);note.receiveShadow=true;
+  let noteRecords=null;
   const chair=new THREE.Group();chair.name='security-office-chair';chair.position.set(layout.chairX,0,layout.chairZ/layout.deskScale);chair.scale.z=1/layout.deskScale;root.add(chair);
   cyl(.035,.39,metal,0,.25,0,chair);box(.51,.10,.47,leather,0,.49,0,chair);box(.49,.60,.08,leather,0,.89,.25,chair);box(.052,.49,.07,metal,0,.65,.30,chair);
   for(const side of [-1,1]){box(.036,.23,.036,metal,side*.28,.60,.08,chair);box(.065,.035,.32,leather,side*.28,.73,.03,chair);}
@@ -80,12 +89,14 @@ export function buildControlRoom(v,world,unit,fixed,dynamic){
       const story=game.blackout.introShot==='monitor'&&feed===focusFeed;
       // Story lighting comes from the actual hall fixtures, like the main CCTV view.
       renderer.shadowMap.autoUpdate=story?shadow:false;
-      if(!story){v.ambientLight.intensity=game.blackout.powerOn?1.2:1.8;v.hemisphereLight.intensity=.7;}
+      if(!story){v.ambientLight.intensity=game.blackout.powerOn?SECURITY_LIGHTING.powered:SECURITY_LIGHTING.infrared;v.hemisphereLight.intensity=SECURITY_LIGHTING.hemisphere;}
       renderer.toneMappingExposure=.96*(v.motionTuning?.brightness??.7);renderer.setRenderTarget(feed.target);renderer.render(v.scene,camera);feed.ready=true;frames++;}
     finally{renderer.setRenderTarget(previousTarget);renderer.toneMappingExposure=exposure;v.ambientLight.intensity=ambient;v.hemisphereLight.intensity=hemi;renderer.shadowMap.autoUpdate=shadow;v.lampHalos.visible=halos;screenGroup.visible=visible;}
   }
   function updateFeeds(game,dt){
-    const b=game.blackout;if(!b)return;screenGroup.visible=b.introLighting!=='blackout';screenGlow.intensity=screenGroup.visible?.65:0;
+    const b=game.blackout;if(!b)return;
+    if(b.lostProperty!==noteRecords){noteRecords=b.lostProperty;drawPropertyNote(noteCanvas,noteRecords??[]);noteTexture.needsUpdate=true;}
+    screenGroup.visible=b.introLighting!=='blackout';screenGlow.intensity=screenGroup.visible?.65:0;
     if(!screenGroup.visible||!isInSafeRoom(game.player)||game.phase!=='playing'||v.security.active)return;
     const opening=b.introShot==='monitor',focused=opening&&openingPushProgress(b.introTime??0)>.22;
     // Prime one screen per frame, then stagger refreshes. Only the story screen
@@ -96,5 +107,5 @@ export function buildControlRoom(v,world,unit,fixed,dynamic){
     else if(!focused&&clock>=1/(opening?6:18)){clock%=1/(opening?6:18);const feed=feeds[cursor++%feeds.length];if(!opening||feed!==focusFeed)drawFeed(feed,game);}
     if(opening&&focusFeed!==cold&&(focused||introClock>=1/30)){introClock%=1/30;drawFeed(focusFeed,game,v.openingScene.camera);}
   }
-  return{root,bank,board,screenGroup,feeds,layout,seatPosition,focusPosition,focusNormal,focusFeed,updateFeeds,get frames(){return frames;},dispose(){feeds.forEach(({target})=>target.dispose());}};
+  return{root,bank,board,note,noteTable,screenGroup,feeds,layout,seatPosition,focusPosition,focusNormal,focusFeed,updateFeeds,get frames(){return frames;},dispose(){feeds.forEach(({target})=>target.dispose());}};
 }

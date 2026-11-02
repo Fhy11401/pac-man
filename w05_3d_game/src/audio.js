@@ -1,6 +1,6 @@
 import {OPENING_REVEAL_AT,DEATH_REVEAL_AT,SCARE_VOICE_OFFSET} from './scare-timing.js';
 import {EnemyVoice,loadEnemyVoiceData} from './enemy-voice.js';
-import {RULES} from './world.js';
+import {RULES,isInSafeRoom,ENTRY_GATE} from './world.js';
 import {OPENING_CUT_AT} from './opening-timing.js';
 import {loadHeartbeatData,playHeartbeatSample,heartbeatGap} from './heartbeat-sample.js';
 import {OpeningAudio} from './opening-audio.js';
@@ -13,13 +13,14 @@ export function phoneRingGain(distance,occluded=false){
   const d=Number.isFinite(distance)?Math.max(0,distance):Infinity;
   return .025+.195/(1+(d/9)**1.6)*(occluded?.62:1);
 }
+export function quietPreparation(game){return game.blackout?!game.blackout.enemyReleased:!game.entryOpened||isInSafeRoom(game.player);}
 export function proximityMix(distance,occluded=false){
   const near=clamp(1-distance/7.5),presence=clamp(1-distance/10);
   const gain=.66*presence**1.35*(occluded?.62:1);
   return {heartGain:gain,heartInterval:60/(62+116*presence),footGain:gain,voiceGain:.29*near*(occluded?.72:1)};
 }
 export class Sound {
-  constructor(){this.masterVolume=1;this.effectsVolume=1;this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voices=new Set();this.score=prepareScore();this.heartbeatBytes=loadHeartbeatData();this.enemyVoiceBytes=loadEnemyVoiceData();this.musicVolume=.325;}
+  constructor(){this.masterVolume=1;this.effectsVolume=1;this.muted=false;this.ctx=null;this.master=null;this.stride=0;this.enemyStride=0;this.foot=0;this.playing=false;this.heartClock=0;this.voices=new Set();this.score=prepareScore();this.heartbeatBytes=loadHeartbeatData();this.enemyVoiceBytes=loadEnemyVoiceData();this.musicVolume=.1625;}
   unlock(){try{if(!this.ctx){
     this.ctx=new(window.AudioContext||window.webkitAudioContext)();
     this.heartbeatReady=this.heartbeatBytes.then(bytes=>bytes?this.ctx.decodeAudioData(bytes):null).then(clip=>this.heartbeatClip=clip).catch(()=>null);
@@ -156,8 +157,8 @@ export class Sound {
       for(const delay of [0,.17]){this.tone(1550,.12,'sine',gain,delay,pan);this.tone(2070,.13,'sine',gain*.42,delay,pan);this.noiseBurst(gain*.35,pan,.09,2800,this.effects,delay,1200);}
       this.tone(980,.24,'sine',gain*.22,.08,-pan*.45);
     });
-    for(const room of BLACKOUT_LAYOUT.rooms??[]){
-      const door=state.roomDoors?.[room.id],last=this.bashSounds.get(room.id);
+    for(const room of [...(BLACKOUT_LAYOUT.rooms??[]),{id:'entry-gate',door:ENTRY_GATE}]){
+      const door=room.id==='entry-gate'?state.officeBash:state.roomDoors?.[room.id],last=this.bashSounds.get(room.id);
       const dx=room.door.x-game.player.x,dz=room.door.z-game.player.z,d=Math.hypot(dx,dz);
       const gain=.44/(1+(d/4.5)**1.6),pan=clamp((Math.cos(yaw)*dx-Math.sin(yaw)*dz)/Math.max(.1,d),-1,1);
       if(door?.bashing){
