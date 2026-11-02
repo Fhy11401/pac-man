@@ -6,7 +6,7 @@ import * as THREE from '../vendor/three.module.js';
 
 test('opening shows one visitor, holds an empty feed, then reveals the sudden lunge',()=>{
  for(const t of [0,1.09,10.55,11,12.7,OPENING_CUT_AT])assert.equal(openingWalk(t).visible,false);
- for(const t of [1.1,3.2,5.5,7,OPENING_STRIKE_AT+.01,13.19])assert.equal(openingWalk(t).visible,true);
+ for(const t of [1.1,3.2,5.5,7,OPENING_STRIKE_AT+.01,OPENING_CUT_AT-.01])assert.equal(openingWalk(t).visible,true);
 });
 test('visitor looks at the camera before folding down and crawling away',()=>{
  assert.equal(openingWalk(7.4).glance,1);assert.equal(openingWalk(7.4).crawl,0);
@@ -20,7 +20,7 @@ test('the empty-frame hold has no approach tell and the lunge completes in under
 });
 test('the seated wide shot holds before the visitor appears and then pushes in smoothly',()=>{
  assert.equal(openingFraming(3.5).push,0);assert.equal(openingFraming(6.7).push,1);
- let previous=0;for(let t=0;t<13.2;t+=.01){const p=openingFraming(t);assert(p.push>=previous&&p.push<=1);previous=p.push;}
+ let previous=0;for(let t=0;t<OPENING_CUT_AT;t+=.01){const p=openingFraming(t);assert(p.push>=previous&&p.push<=1);previous=p.push;}
 });
 test('crawl pose lowers the torso and reverses the knees without modifying the scene root',()=>{
  const model={body:new THREE.Group(),root:new THREE.Group(),limbs:[-1,1].flatMap(side=>[{side,leg:true,node:new THREE.Group(),knee:new THREE.Group(),ankle:new THREE.Group()},{side,leg:false,node:new THREE.Group(),elbow:new THREE.Group()}])};

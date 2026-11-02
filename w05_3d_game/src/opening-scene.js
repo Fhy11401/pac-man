@@ -50,7 +50,7 @@ export function prepareOpeningBody(model){
 const neckBase=new THREE.Vector3(0,-.18,-.02),neckOffset=new THREE.Vector3();
 export function anchorOpeningNeck(model){
   // Counter-rotating the head must pivot at the neck, not the face centre.
-  neckOffset.copy(neckBase).applyQuaternion(model.head.quaternion);
+  neckOffset.copy(neckBase).multiply(model.head.scale).applyQuaternion(model.head.quaternion);
   model.head.position.set(0,1.46,.006).sub(neckOffset);
 }
 export function poseOpeningCrawl(model,pose,time){
@@ -96,7 +96,7 @@ export function buildOpeningScene(v,world,unit){
   camera.updateMatrixWorld(true);
   const initialCameraRotation=camera.quaternion.clone(),motion=new AttendantMotion(),aimCamera=camera.clone(),headPoint=new THREE.Vector3(),approachVector=new THREE.Vector3();let lastTime=null,lensThreat=0,faceExposure=0;
   if(path){const stop=world(path.x,path.from+(path.to-path.from)*.46);approachVector.copy(camera.position).sub(stop);approachVector.y=0;approachVector.multiplyScalar(Math.max(0,1-.53/approachVector.length()));}
-  const revealLight=new THREE.SpotLight(0xeee5d5,0,3,.85,.7,1);v.scene.add(revealLight,revealLight.target);
+  const revealLight=new THREE.SpotLight(0xeee5d5,0,9,.85,.7,1);v.scene.add(revealLight,revealLight.target);
   const bodyLight=new THREE.SpotLight(0xc4c9d5,0,9,.85,1,2);bodyLight.name='opening-body-fill';v.scene.add(bodyLight,bodyLight.target);
   const room=v.blackoutView.controlRoom,seatCamera=new THREE.PerspectiveCamera(),endCamera=new THREE.PerspectiveCamera(),playPosition=new THREE.Vector3(),playRotation=new THREE.Quaternion();
   function seatedCamera(playerCamera,time){
@@ -120,7 +120,7 @@ export function buildOpeningScene(v,world,unit){
     }
     const time=game.blackout.introTime??0,pose=openingWalk(time);faceExposure=pose.faceExposure;actor.visible=actor.visible&&pose.visible;lensThreat=pose.lensThreat;
     if(path){
-      const distance=(path.to-path.from)*unit,approachDistance=approachVector.length(),speed=p=>p.strike>0?0:Math.hypot(p.speed*distance,p.crawlSpeed*distance*.65);
+      const distance=(path.to-path.from)*unit,approachDistance=approachVector.length(),speed=p=>p.strike>0?0:Math.hypot(p.speed*distance,p.crawlSpeed*distance*.65)/actor.scale.z;
       if(lastTime===null||time<lastTime||time-lastTime>.25){motion.reset();for(let t=0;t<time;){const step=Math.min(1/120,time-t);t+=step;motion.update(speed(openingWalk(t)),step);} }
       else motion.update(speed(pose),time-lastTime);
       actor.position.copy(world(path.x,path.from+(path.to-path.from)*(pose.progress+(pose.lunging?0:.65*pose.crawlTravel)))).addScaledVector(approachVector,pose.approach);
@@ -135,7 +135,7 @@ export function buildOpeningScene(v,world,unit){
       const horizontal=Math.hypot(camera.position.x-headPoint.x,camera.position.z-headPoint.z);
       model.head.rotation.x=-Math.atan2(camera.position.y-headPoint.y,horizontal)*pose.glance-model.body.rotation.x;
       anchorOpeningNeck(model);actor.updateMatrixWorld(true);model.head.getWorldPosition(headPoint);
-      aimCamera.lookAt(headPoint);revealLight.position.copy(camera.position);revealLight.target.position.copy(headPoint);revealLight.intensity=faceReveal(time,OPENING_REVEAL_AT)*3.2;
+      aimCamera.lookAt(headPoint);revealLight.position.copy(camera.position);revealLight.target.position.copy(headPoint);revealLight.intensity=actor.visible?1.8+faceReveal(time,OPENING_REVEAL_AT)*1.4:0;
     }
     bodyLight.position.copy(camera.position);bodyLight.position.y+=.35;bodyLight.target.position.copy(actor.position);bodyLight.target.position.y+=.85-pose.crawl*.4;bodyLight.intensity=actor.visible&&!pose.lunging?22:0;
     lastTime=time;

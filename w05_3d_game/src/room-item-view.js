@@ -34,7 +34,7 @@ export function applyKnockdown(model,state){
   model.root.rotation.x=0;model.root.rotation.z=0;
   if(!state)return;
   const p=knockdownPose(state.elapsed);
-  model.root.rotation.x=p.angle;model.root.position.y+=p.lift;
+  model.root.rotation.x=p.angle;model.root.position.y+=p.lift*model.root.scale.y;
   model.body.rotation.x-=p.fold*.12;
   for(const limb of model.limbs){
     limb.node.rotation.x=limb.leg?-.35*p.fold:-.7*p.fold;

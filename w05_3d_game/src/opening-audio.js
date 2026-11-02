@@ -7,9 +7,9 @@ export function openingSamples(kind,sampleRate){
     const t=i/sampleRate;seed=(Math.imul(seed,1664525)+1013904223)>>>0;
     noise=noise*.6+((seed/4294967296)*2-1)*.4;
     if(kind==='monitor-watch'){
-      const stare=Math.max(0,Math.min(1,(t-6.7)/.65)),near=Math.max(0,Math.min(1,(t-7)/5.6)),fade=Math.min(1,t,(13.2-t)*18);
+      const stare=Math.max(0,Math.min(1,(t-6.7)/.65)),near=Math.max(0,Math.min(1,(t-7)/5.6)),fade=Math.min(1,t,(OPENING_CUT_AT-t)*18);
       let steps=0;for(const at of [1.65,2.15,2.65,3.05]){const age=t-at;if(age>=0&&age<.23)steps+=(1+near*1.3)*Math.exp(-age*22)*(.11*Math.sin(age*360)+.055*noise);}
-      const electrical=Math.exp(-(((t-5.35)/.16)**2))*.035+Math.exp(-(((t-13.02)/.075)**2))*.12;
+      const electrical=Math.exp(-(((t-5.35)/.16)**2))*.035+Math.exp(-(((t-(OPENING_CUT_AT-.18))/.075)**2))*.12;
       const breath=near**2*(.035+.07*Math.max(0,Math.sin((t-7)*3.7)))*noise;
       const scrape=t>OPENING_CRAWL_MOVE_AT&&t<OPENING_CRAWL_END?.12*Math.max(0,Math.sin((t-OPENING_CRAWL_MOVE_AT)*10.5))**3*noise:0;
       const silence=1-.985*Math.max(0,Math.min(1,(t-OPENING_CRAWL_END)/.25));

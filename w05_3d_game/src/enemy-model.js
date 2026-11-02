@@ -2,6 +2,8 @@ import {enableThreatShadow} from './threat-lighting.js';
 import * as THREE from '../vendor/three.module.js';
 import {contactShade} from './hotel-materials.js';
 
+export const ATTENDANT_SCALE=1.16;
+
 const mesh=(parent,geometry,material,x=0,y=0,z=0,scale=[1,1,1])=>{
   const item=new THREE.Mesh(geometry,material);item.position.set(x,y,z);item.scale.set(...scale);item.receiveShadow=true;parent.add(item);return item;
 };
@@ -190,8 +192,8 @@ export function attendantMaterials(){
 
 // Bake a common anatomical deformation into every rigid surface, including
 // eyelids, teeth and seams, so openings stay aligned without extra draw calls.
-function refineHeadAnatomy(head){
-  const warp=(x,y,z,out)=>{let nx=x,ny=y,nz=z;
+function refineHeadAnatomy(head,scare=false){
+  const warp=(x,y,z,out,open=0)=>{let nx=x,ny=y,nz=z;
       const front=Math.max(0,Math.min(1,(z-.035)/.045));
       // Keep the broad smile continuous with the cut surface and both tooth rows.
       const mouth=front*gaussian(x,y,0,-.085,.19,.075);
@@ -204,18 +206,23 @@ function refineHeadAnatomy(head){
       nz-=.025*hollow;
       nx*=1-.18*Math.exp(-(((y+.16)/.085)**2));
       ny-=.013*front*gaussian(x,y,0,-.22,.06,.045);
-      return out.set(nx*.62,ny*.66,nz*.76);
+      out.set(nx*.62,ny*.66,nz*.76);
+      if(open){const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);},dy=y-mouthCentre(x),width=ease(1-(x/.19)**2),front=ease((z-.005)/.06)*(1-ease((y-.005)/.035));
+        const lower=ease(-dy/.012)*(1-ease((-y-.22)/.21)),upper=ease(dy/.012)*(1-ease(dy/.085));
+        out.y+=front*width*(.008*upper-.10*lower);out.z-=front*width*lower*.008;
+      }return out;
   };
   const base=new THREE.Vector3(),dx=new THREE.Vector3(),dy=new THREE.Vector3(),dz=new THREE.Vector3(),normal=new THREE.Vector3(),jacobian=new THREE.Matrix3(),epsilon=.00001;
   head.traverse(item=>{if(!item.isMesh)return;const geometry=item.geometry;item.updateMatrix();geometry.applyMatrix4(item.matrix);item.position.set(0,0,0);item.quaternion.identity();item.scale.setScalar(1);const p=geometry.attributes.position,n=geometry.attributes.normal;
-    for(let i=0;i<p.count;i++){
-      const x=p.getX(i),y=p.getY(i),z=p.getZ(i);warp(x,y,z,base);
-      warp(x+epsilon,y,z,dx).sub(base).divideScalar(epsilon);warp(x,y+epsilon,z,dy).sub(base).divideScalar(epsilon);warp(x,y,z+epsilon,dz).sub(base).divideScalar(epsilon);
-      jacobian.set(dx.x,dy.x,dz.x,dx.y,dy.y,dz.y,dx.z,dy.z,dz.z).invert().transpose();
-      normal.fromBufferAttribute(n,i).applyMatrix3(jacobian).normalize();n.setXYZ(i,normal.x,normal.y,normal.z);p.setXYZ(i,base.x,base.y,base.z);
-    }
-    // Preserve the smooth source normals across the batched triangle seams.
-    geometry.computeBoundingBox();geometry.computeBoundingSphere();
+    const sourceP=p.clone(),sourceN=n.clone();
+    const deform=(position,normals,open)=>{for(let i=0;i<p.count;i++){
+      const x=sourceP.getX(i),y=sourceP.getY(i),z=sourceP.getZ(i);warp(x,y,z,base,open);
+      warp(x+epsilon,y,z,dx,open).sub(base).divideScalar(epsilon);warp(x,y+epsilon,z,dy,open).sub(base).divideScalar(epsilon);warp(x,y,z+epsilon,dz,open).sub(base).divideScalar(epsilon);
+      jacobian.set(dx.x,dy.x,dz.x,dx.y,dy.y,dz.y,dx.z,dy.z,dz.z);normal.fromBufferAttribute(sourceN,i);if(Math.abs(jacobian.determinant())>.00001)normal.applyMatrix3(jacobian.invert().transpose()).normalize();
+      normals.setXYZ(i,normal.x,normal.y,normal.z);position.setXYZ(i,base.x,base.y,base.z);
+    }};
+    deform(p,n,0);if(scare){const target=p.clone(),targetN=n.clone();deform(target,targetN,1);geometry.morphAttributes.position=[target];geometry.morphAttributes.normal=[targetN];item.updateMorphTargets();}
+    p.needsUpdate=true;n.needsUpdate=true;geometry.computeBoundingBox();geometry.computeBoundingSphere();
   });
 }
 
@@ -268,7 +275,7 @@ function mouthCavityGeometry(){
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
 
-export function attendantHead(m){
+export function attendantHead(m,{scare=false}={}){
   const g=new THREE.Group();g.name='attendant-head';
   mesh(g,new THREE.SphereGeometry(.206,24,16),m.black,0,0,-.062,[.98,1.22,.88]);
   mesh(g,maskGeometry(),m.porcelain);
@@ -310,7 +317,7 @@ export function attendantHead(m){
     }
   }
   addHair(g,m.hair);
-  batchRigid(g);refineHeadAnatomy(g);return g;
+  batchRigid(g);refineHeadAnatomy(g,scare);return g;
 }
 
 function coatGeometry(){
@@ -343,7 +350,7 @@ function sleeveGeometry(upper){
 }
 
 export function createAttendant(m){
-  const root=new THREE.Group(),body=new THREE.Group();body.name='attendant-body';root.add(body);
+  const root=new THREE.Group(),body=new THREE.Group();body.name='attendant-body';root.add(body);root.scale.setScalar(ATTENDANT_SCALE);
   mesh(body,coatGeometry(),m.coat);
   mesh(body,new THREE.CylinderGeometry(.070,.082,.15,20),m.porcelain,0,1.42,0,[1,1,.8]);
   for(const side of [-1,1]){
@@ -351,7 +358,7 @@ export function createAttendant(m){
     mesh(body,curveTube([[side*.065,1.43,.040],[side*.09,1.397,.075],[0,1.38,.085]],.0035,12),m.lapel);
   }
   batchRigid(body);
-  const head=attendantHead(m);head.position.set(0,1.64,.026);body.add(head);
+  const head=attendantHead(m,{scare:true});head.scale.setScalar(1.10);head.position.set(0,1.658,.028);body.add(head);
   const limbs=[];
   for(const side of [-1,1]){
     const arm=new THREE.Group();arm.name=`attendant-arm-${side}`;arm.position.set(side*.238,1.30,0);body.add(arm);

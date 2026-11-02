@@ -6,7 +6,7 @@ import {OPENING_CUT_AT} from '../src/opening-timing.js';
 test('outage precedes backup power and the optional call without completing repairs',()=>{
  const events=[],game={blackout:{powerOn:false}},intro=new BlackoutIntro({onEvent:e=>events.push(e),onComplete:g=>{assert.equal(g,game);events.push('call');}});
  intro.start(game);assert.equal(game.blackout.introLighting,'mains');assert.equal(game.blackout.introShot,'monitor');assert.equal(game.blackout.introTime,0);
- for(let i=0;i<133;i++)intro.update(.1);assert.equal(game.blackout.introLighting,'blackout');assert.deepEqual(events,['monitor-watch','lens-strike','mains-fail']);
+ for(let i=0;i<Math.round(OPENING_CUT_AT*10)+1;i++)intro.update(.1);assert.equal(game.blackout.introLighting,'blackout');assert.deepEqual(events,['monitor-watch','lens-strike','mains-fail']);
  for(let i=0;i<14;i++)intro.update(.1);assert.equal(game.blackout.introLighting,'blackout');assert.deepEqual(events,['monitor-watch','lens-strike','mains-fail','backup-start']);
  for(let i=0;i<32;i++)intro.update(.1);assert.equal(game.blackout.introLighting,'backup');assert.deepEqual(events,['monitor-watch','lens-strike','mains-fail','backup-start','backup-ready']);
  for(let i=0;i<18;i++)intro.update(.1);assert.equal(intro.active,false);assert.equal(game.blackout.introShot,undefined);assert.equal(game.blackout.introTime,undefined);assert.equal(game.blackout.introLighting,undefined);assert.equal(game.blackout.powerOn,false);assert.deepEqual(events,['monitor-watch','lens-strike','mains-fail','backup-start','backup-ready','call']);
@@ -31,4 +31,16 @@ test('skipping clears cinematic overrides and starts exactly one call without re
  intro.start(game);intro.update(.1);assert.equal(intro.skip(),true);
  assert.equal(game.blackout.introShot,undefined);assert.equal(game.blackout.introLighting,undefined);assert.equal(game.blackout.powerOn,false);
  const count=events.length;intro.update(100);assert.equal(intro.skip(),false);assert.equal(calls,1);assert.equal(events.length,count);
+});
+
+
+test('revealed face remains visible for a readable hold before power fails',()=>{
+ assert(OPENING_CUT_AT-OPENING_REVEAL_AT>=1.1);
+ for(const fps of [30,60,144]){
+  const events=[],game={blackout:{}},intro=new BlackoutIntro({onEvent:e=>events.push(e)});intro.start(game);
+  while(game.blackout.introTime<OPENING_REVEAL_AT+1)intro.update(1/fps);
+  assert.equal(game.blackout.introShot,'monitor');assert.equal(events.filter(e=>e==='lens-strike').length,1);assert(!events.includes('mains-fail'));
+  while(game.blackout.introShot==='monitor')intro.update(1/fps);
+  assert.equal(game.blackout.introShot,'outage');assert.equal(events.filter(e=>e==='mains-fail').length,1);
+ }
 });

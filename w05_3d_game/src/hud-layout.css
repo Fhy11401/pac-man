@@ -113,3 +113,6 @@ body.blackout-mode #heartbeat-hud .heartbeat-trace{display:block;flex:none;width
 @media(prefers-reduced-motion:reduce){#heartbeat-hud .heartbeat-ring{display:none}}
 
 body.blackout-mode #heartbeat-hud .heartbeat-trace>path:first-child{opacity:.6;stroke-width:2}
+
+/* Keep the cinematic/scare frame free of the device silhouette. */
+body[data-opening="monitor"] #tablet,body[data-phase="caught"] #tablet{display:none!important}

@@ -1,8 +1,10 @@
+import {setScareMouth,scarePerformance,scareTargetHeight} from './scare-performance.js';
 import {RoomItemView,applyKnockdown} from './room-item-view.js';
 import {setThreatExposure} from './threat-lighting.js';
 import {faceReveal,OPENING_REVEAL_AT,DEATH_REVEAL_AT,DEATH_LUNGE_SECONDS} from './scare-timing.js';
-import {AttendantMotion,poseAttendant,smoothAttendantHeading} from './attendant-motion.js';
+import {AttendantMotion,poseAttendant,smoothAttendantHeading,trackAttendantGaze} from './attendant-motion.js';
 import {buildOpeningScene} from './opening-scene.js';
+import {OPENING_STRIKE_AT} from './opening-timing.js';
 import {DEFAULT_TUNING} from './tuning.js';
 import * as THREE from '../vendor/three.module.js';
 import { MAP, MAP_CENTER, MAP_WIDTH, MAP_HEIGHT, SHARDS, EXIT, ENEMY_START, isOpen, RULES,CELL_SIZE,wallInset,transitionWalls,isInSafeRoom,IS_MAP_DRAFT } from './world.js';
@@ -195,20 +197,24 @@ export class WorldView {
   finishLegacyDoors(){this.scene.add(this.randomDoors);batchStaticMeshes(this.randomDoors);this.randomDoors.updateMatrixWorld(true);this.randomDoors.traverse(object=>{object.matrixAutoUpdate=false;object.matrixWorldAutoUpdate=false;});}
   buildScare(){
     this.scareScene=new THREE.Scene();this.scareCamera=new THREE.PerspectiveCamera(42,this.camera.aspect,.02,8);
-    this.scareFace=attendantHead(this.attendantMat);this.scareScene.add(this.scareFace);
+    this.scareFace=attendantHead(this.attendantMat,{scare:true});this.scareScene.add(this.scareFace);
+    this.scareBackdrop=this.mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial({color:0x030102,transparent:true,opacity:0,depthWrite:false,toneMapped:false}),this.scareScene);this.scareBackdrop.position.z=-4;this.scareBackdrop.renderOrder=-1;
     const coat=this.attendantMat.coat;
     const shoulders=this.mesh(new THREE.CylinderGeometry(.095,.36,.6,28),coat,this.scareFace);shoulders.position.set(0,-.49,-.10);
     this.scareAmbient=new THREE.AmbientLight(0x8a6a70,.24);this.scareScene.add(this.scareAmbient);const red=new THREE.PointLight(0xff3527,.85,4,1);red.position.set(-.55,.3,-.10);this.scareScene.add(red);
     const cold=new THREE.PointLight(0xe4dece,2.1,3,1);cold.position.set(.62,.45,-.13);this.scareScene.add(cold);this.scareKey=cold;this.scareRim=red;
   }
   drawScare(game,time){
-    if(game.phase!=='caught')return;
-    const t=RULES.caughtSeconds-game.caught;if(t<SCARE_TURN_SECONDS)return;
-    const reveal=faceReveal(t,DEATH_REVEAL_AT);this.scareAmbient.intensity=.012+.228*reveal;this.scareKey.intensity=2.1*reveal;this.scareRim.intensity=.025+.825*reveal;
+    const opening=game.blackout?.introShot==='monitor',introTime=game.blackout?.introTime??0;
+    if(game.phase!=='caught'&&!(opening&&introTime>=OPENING_STRIKE_AT))return;
+    const t=opening?SCARE_TURN_SECONDS+introTime-OPENING_STRIKE_AT:RULES.caughtSeconds-game.caught;if(t<SCARE_TURN_SECONDS)return;
+    const reveal=opening?faceReveal(introTime,OPENING_REVEAL_AT):faceReveal(t,DEATH_REVEAL_AT);
+    const age=opening?introTime-OPENING_REVEAL_AT:t-DEATH_REVEAL_AT,performance=scarePerformance(age,{reduced:!this.motionEnabled||this.reducedMotion.matches});
+    setScareMouth(this.scareFace,performance.mouth);this.scareAmbient.intensity=.012+.228*reveal;this.scareKey.intensity=2.1*reveal;this.scareRim.intensity=.025+.825*reveal;
     this.scareCamera.aspect=this.camera.aspect;this.scareCamera.updateProjectionMatrix();
     const previous=this.scarePlacement;
-    if(!previous||previous.game!==game||previous.deaths!==game.deaths||previous.aspect!==this.camera.aspect){
-      const head=this.enemy.getObjectByName('attendant-head');
+    if(!previous||previous.game!==game||previous.deaths!==game.deaths||previous.aspect!==this.camera.aspect||previous.opening!==opening||opening&&t<previous.lastT){
+      const head=opening?this.openingScene.model.head:this.enemy.getObjectByName('attendant-head');
       const inverseHead=new THREE.Matrix4().copy(head.matrixWorld).invert(),points=[],worldBounds={minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity};
       // Bounding corners are sufficient here: both scenes use the same rigid head mesh.
       // Capture only the head, not the separately drawn scare shoulders.
@@ -245,18 +251,17 @@ export class WorldView {
       const relative=head.getWorldPosition(new THREE.Vector3());this.camera.worldToLocal(relative);
       const fovRatio=Math.tan(THREE.MathUtils.degToRad(this.camera.fov/2))/tan;
       const start=fit(height,centre,rotation,Math.max(.4,-relative.z*fovRatio));
-      const finish=fit(Math.max(height,Math.min(2.12,height*1.07)),{x:0,y:.02},new THREE.Quaternion(),-start.position.z);
-      this.scarePlacement={game,deaths:game.deaths,aspect,fov:this.camera.fov,start:start.position,finish:finish.position,rotation,scale,worldBounds,startBounds:start.bounds,endBounds:finish.bounds};
+      const finish=fit(Math.max(height,scareTargetHeight(aspect)),{x:0,y:.16},new THREE.Quaternion(),-start.position.z);
+      this.scarePlacement={game,opening,lastT:t,deaths:game.deaths,aspect,fov:this.camera.fov,start:start.position,finish:finish.position,rotation,scale,worldBounds,startBounds:start.bounds,endBounds:finish.bounds};
     }
-    const placement=this.scarePlacement,p=Math.min(1,(t-SCARE_TURN_SECONDS)/DEATH_LUNGE_SECONDS),ease=this.motionEnabled?1-(1-p)**3:0;
+    const placement=this.scarePlacement,p=Math.min(1,(t-SCARE_TURN_SECONDS)/DEATH_LUNGE_SECONDS),ease=this.motionEnabled&&!this.reducedMotion.matches?1-(1-p)**3:reveal;
     this.scareFace.position.copy(placement.start).lerp(placement.finish,ease);
     this.scareFace.quaternion.copy(placement.rotation).slerp(new THREE.Quaternion(),ease);
-    // The lunge begins at the captured apparent size. Only the short final motion shakes.
-    if(this.motionEnabled){
-      this.scareFace.position.x+=Math.sin(time*39)*.006*ease;
-      this.scareFace.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(time*31)*.025*ease,Math.sin(time*26)*.035*ease,Math.sin(time*33)*.025*ease)));
-    }
-    this.scareFace.scale.copy(placement.scale);
+    placement.lastT=t;
+    this.scareFace.position.x+=performance.x;this.scareFace.position.y+=performance.y;
+    this.scareFace.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(performance.pitch,performance.yaw,performance.roll)));
+    this.scareFace.scale.copy(placement.scale).multiplyScalar(performance.zoom);this.scareFace.scale.x*=1+performance.backdrop*.28;
+    const cover=4*Math.tan(THREE.MathUtils.degToRad(this.scareCamera.fov/2));this.scareBackdrop.scale.set(cover*this.camera.aspect*1.01,cover*1.01,1);this.scareBackdrop.material.opacity=performance.backdrop;
     this.renderer.autoClear=false;this.renderer.clearDepth();this.renderer.render(this.scareScene,this.scareCamera);this.renderer.autoClear=true;
   }
   buildShards(){
@@ -282,14 +287,14 @@ export class WorldView {
   render(game,yaw,pitch,time,dt=1/60,active=true,motionScale=1){
     if(this.security.active&&(!game.blackout||!active||game.phase!=='playing'))this.setSecurityMonitor(false);
     if(this.randomDoors)this.randomDoors.visible=!game.blackout;
-    if(this.lastGame!==game){this.lastGame=game;this.shardFade.fill(1);this.enemyHeading=-Math.PI/2;this.playerMotion.reset();this.lastViewYaw=null;this.enemyMotion?.reset();this.enemyTurnSpeed=0;this.bedEyeHeight=this.eyeHeight;}
+    if(this.lastGame!==game){this.lastGame=game;this.shardFade.fill(1);this.enemyHeading=-Math.PI/2;this.playerMotion.reset();this.lastViewYaw=null;this.enemyMotion?.reset();if(this.enemyRig)this.enemyRig.gaze=null;this.enemyTurnSpeed=0;this.bedEyeHeight=this.eyeHeight;}
     if(!game.blackout)this.safeRoom.update(game,dt);
     const speed=Math.hypot(game.playerVelocity.x,game.playerVelocity.z);
     const turnRate=angularTurnRate(this.lastViewYaw,yaw,dt);this.lastViewYaw=active&&game.phase==='playing'?yaw:null;
     const underBed=Boolean(game.blackout?.bedHide),motion=this.playerMotion.update(underBed?0:speed,dt,this.motionTuning,{active:active&&game.phase==='playing',motion:this.motionEnabled&&!this.reducedMotion.matches,scale:underBed?0:motionScale,turnRate});this.updateFov();
     if(game.phase!=='caught')this.bedEyeHeight=bedViewHeight(game.blackout,this.eyeHeight);
     this.camera.position.copy(world(game.player.x,game.player.z,(this.bedEyeHeight??this.eyeHeight)+motion.bob));this.camera.position.x+=Math.cos(yaw)*motion.sway;this.camera.position.z-=Math.sin(yaw)*motion.sway;this.camera.rotation.set(pitch+motion.pitch,yaw,0,'YXZ');const openingMonitor=this.openingScene?.update(game,this.camera)??false;this.cameraLight.position.copy(this.camera.position);
-    const reveal=openingMonitor?(this.openingScene?.faceExposure??faceReveal(game.blackout.introTime??0,OPENING_REVEAL_AT)):game.phase==='caught'?faceReveal(RULES.caughtSeconds-game.caught,DEATH_REVEAL_AT):1;setThreatExposure(this.attendantMat,.012+.988*reveal);
+    const reveal=openingMonitor?(this.openingScene?.faceExposure??faceReveal(game.blackout.introTime??0,OPENING_REVEAL_AT)):game.phase==='caught'?faceReveal(RULES.caughtSeconds-game.caught,DEATH_REVEAL_AT):1;setThreatExposure(this.attendantMat,openingMonitor?.28+.72*reveal:.012+.988*reveal);
     this.blackoutView.update(game,dt);
     this.securityRooms?.update(game,dt);
     const es=Math.hypot(game.enemyVelocity.x,game.enemyVelocity.z);
@@ -302,7 +307,8 @@ export class WorldView {
       this.enemyHeading+=Math.atan2(Math.sin(target-this.enemyHeading),Math.cos(target-this.enemyHeading))*(1-Math.exp(-dt*22));
     }
     this.enemy.visible=!openingMonitor&&Boolean(game.blackout||game.entryOpened)&&(game.phase!=='caught'||RULES.caughtSeconds-game.caught<SCARE_TURN_SECONDS);
-    this.enemy.position.copy(world(game.enemy.x,game.enemy.z));this.enemy.rotation.y=this.enemyHeading;const gait=(this.enemyMotion??=new AttendantMotion()).update(game.phase==='playing'?es*UNIT:0,dt,active);poseAttendant(this.enemyRig??{body:this.enemyBody,head:this.enemyHead,limbs:this.enemyLimbs},gait);
+    this.enemy.position.copy(world(game.enemy.x,game.enemy.z));this.enemy.rotation.y=this.enemyHeading;const gait=(this.enemyMotion??=new AttendantMotion()).update(game.phase==='playing'?es*UNIT/this.enemy.scale.z:0,dt,active,game.blackout?.enemyMode==='chase'||game.phase==='caught'?1:0);poseAttendant(this.enemyRig??{body:this.enemyBody,head:this.enemyHead,limbs:this.enemyLimbs},gait);
+    if(!openingMonitor&&!game.blackout?.knockdown){const chasing=game.phase==='playing'&&(game.blackout?game.blackout.enemyMode==='chase':game.entryOpened);trackAttendantGaze(this.enemyRig,chasing?this.camera.position:null,dt,active);}
     applyKnockdown(this.enemyRig??{root:this.enemy,body:this.enemyBody,limbs:this.enemyLimbs},game.blackout?.knockdown);
     this.camera.updateMatrixWorld(true);this.roomItemView?.update(game,this.camera,active&&!openingMonitor);
     const friendly=Boolean(this.motionTuning.friendlyMode),warning=!game.blackout?.knockdown&&!openingMonitor&&active&&game.phase==='playing'&&!blackoutVisualLighting(game.blackout).blackout&&(friendly||!game.blackout&&game.entryOpened&&!isInSafeRoom(game.player));
