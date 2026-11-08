@@ -1,0 +1,34 @@
+[
+  {
+    "file": "damask-reference-v281.png",
+    "width": 1254,
+    "height": 1254,
+    "bytes": 3468495,
+    "sha256": "149ed8bb7b0043d82acc5e2fa1e31462934adc610ee9c81796165f1ba1e2d869",
+    "kind": "ImageGen reference-derived repaired tile"
+  },
+  {
+    "file": "plaster-reference-v281.png",
+    "width": 1254,
+    "height": 1254,
+    "bytes": 4549799,
+    "sha256": "d1ac1f43a38b2345684cb25b1509d7b15219ff060c74d90aeac5d5209d3b63fa",
+    "kind": "ImageGen reference-derived repaired tile"
+  },
+  {
+    "file": "source-reference.png",
+    "width": 2132,
+    "height": 1202,
+    "bytes": 3607202,
+    "sha256": "af7253324e97fb7d8965c2a9b72f39f0ea954e856fa77d2446cfc4954d3dde7a",
+    "kind": "unmodified game reference image"
+  },
+  {
+    "file": "wood-reference-v281.png",
+    "width": 1254,
+    "height": 1254,
+    "bytes": 3419687,
+    "sha256": "bb4f145911e43a10379e686dbcf89d8b18e3b1393dadd669ee8794022b26bb6b",
+    "kind": "ImageGen reference-derived repaired tile"
+  }
+]

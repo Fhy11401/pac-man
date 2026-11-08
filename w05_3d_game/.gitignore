@@ -1,0 +1,26 @@
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
+**/__pycache__/
+*.py[cod]
+
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+
+# Local work and recordings
+**/qa/
+**/qa-ui/
+**/playwright-report/
+**/test-results/
+**/backups/
+**/private-notes/
+**/transcripts/
+**/PROMPTS.md
+*.log
+*.zip
+.DS_Store
+Thumbs.db

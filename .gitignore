@@ -1,23 +1,26 @@
-# Node.js dependencies
+# Dependencies and build output
 **/node_modules/
-
-# Vite build output and cache
 **/dist/
 **/.vite/
 **/.cache/
-
-# Python cache
 **/__pycache__/
 *.py[cod]
 
-# Local environment files
+# Local credentials and environment
 .env
 .env.*
 !.env.example
 
-# Logs
+# Local work and recordings
+**/qa/
+**/qa-ui/
+**/playwright-report/
+**/test-results/
+**/backups/
+**/private-notes/
+**/transcripts/
+**/PROMPTS.md
 *.log
-
-# Operating system generated files
+*.zip
 .DS_Store
 Thumbs.db

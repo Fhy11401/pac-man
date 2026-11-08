@@ -1,0 +1,118 @@
+/* Night-shift interface: one owner for each action and a clear central view. */
+:root{--hud-gap:clamp(16px,3vw,42px);--hud-rail:220px;--hud-signal:#d7d6d1;--hud-muted:#92908b;--hud-ink:#080808;--hud-line:#a8a49a55}
+body.blackout-mode .blackout-objective-strip{top:var(--hud-gap);left:var(--hud-gap);max-width:calc(100vw - var(--hud-rail) - 3 * var(--hud-gap))}
+body.blackout-mode .blackout-objective-strip h2{font:15px/1.5 var(--mono);letter-spacing:.5px;margin:0}
+body.blackout-mode .blackout-objective-strip>span{display:none}
+body.blackout-mode .night-readout-clock{right:var(--hud-gap);top:var(--hud-gap);gap:3px}
+body.blackout-mode .night-readout-clock strong{font-size:30px}
+body.blackout-mode .night-readout-clock span{font-size:18px;color:var(--hud-muted)}
+body.blackout-mode .top-status{right:var(--hud-gap);top:calc(var(--hud-gap) + 61px)}
+body.blackout-mode .top-actions{right:var(--hud-gap);top:calc(var(--hud-gap) + 87px)}
+body.blackout-mode #pause-button{font:11px var(--mono);border:0;background:#08080880;padding:6px 0 6px 10px;color:var(--hud-muted)}
+body.blackout-mode #pause-button kbd{margin-left:12px}
+/* Actions live on the phone only while it is being operated. */
+body.blackout-mode:not(.blackout-phone-open) #phone-apps{display:none}
+body.blackout-mode .tablet-counter>div>small,body.blackout-mode .tablet-counter>strong,body.blackout-mode #blackout-map-key,body.blackout-mode #exit-state{display:none}
+body.blackout-mode #tablet .tablet-counter{height:14cqw}
+body.blackout-mode #tablet .count-label{font:500 4.5cqw var(--phone-font);color:#ededed}
+body.blackout-mode #tablet #minimap{margin-bottom:auto}
+body.blackout-mode #tablet .phone-control-hint{font-size:3.6cqw;margin-top:auto;padding-top:4cqw;padding-bottom:5cqw}
+body.blackout-mode .blackout-equipment{right:var(--hud-gap);bottom:116px;width:var(--hud-rail);padding:10px 0;border-top:1px solid var(--hud-line);font:11px/1.5 var(--mono);color:var(--hud-signal)}
+body.blackout-mode .blackout-equipment .vision-readout,body.blackout-mode .blackout-equipment .flashlight-readout{display:flex;align-items:center;gap:12px;margin:0 0 8px;min-height:24px}
+body.blackout-mode .blackout-equipment kbd{min-width:24px;height:23px;font:11px/1 var(--mono);border:1px solid var(--hud-line);background:#080808a6}
+body.blackout-mode .flashlight-readout small{display:none}
+body.blackout-mode .blackout-phones{display:flex;gap:20px;margin:2px 0 0}
+body.blackout-mode .blackout-phones p{display:grid;grid-template-columns:24px auto;gap:6px;margin:0}
+body.blackout-mode .blackout-phones small{grid-column:2;font:9px var(--mono);color:var(--hud-muted)}
+body.blackout-mode .night-readout-power{right:var(--hud-gap);left:auto;bottom:var(--hud-gap);width:var(--hud-rail);font:18px/1.2 var(--terminal);gap:5px}
+body.blackout-mode #movement-sound{right:var(--hud-gap);bottom:300px;font:10px var(--mono)}
+body.blackout-mode #heartbeat-hud{top:auto;right:var(--hud-gap);bottom:298px;right:calc(var(--hud-gap) + 150px);transform:none;width:24px;height:24px}
+body.blackout-mode #heartbeat-hud .heartbeat-trace{display:none}
+body.blackout-mode #room-inventory{right:var(--hud-gap);top:calc(var(--hud-gap) + 130px);width:var(--hud-rail);max-width:none;gap:9px;padding:11px 0 11px 10px;border:0;border-left:2px solid var(--hud-line);box-shadow:none;background:#0808088c;color:var(--hud-signal);font-family:var(--mono)}
+body.blackout-mode #room-inventory .item-icon{width:30px;height:36px}
+body.blackout-mode #room-inventory strong{font-size:11px;line-height:1.5}
+body.blackout-mode #room-inventory .item-slot{font-size:9px;letter-spacing:1px}
+body.blackout-mode #room-inventory .item-description{font-size:10px;line-height:1.5}
+body.blackout-mode #room-inventory .item-status{font-size:9px;line-height:1.5}
+body.blackout-mode #room-inventory kbd{font-size:14px;padding:5px;margin-right:7px}
+body.blackout-mode #room-inventory[data-ready=true]{border-color:#efe0b3;background:#1d1b12d9;box-shadow:0 0 14px #efe0b322;color:#fff0c9}
+body.blackout-mode #room-inventory[data-item=empty]:not([data-stunned=true]){opacity:.65}
+body.blackout-mode #room-inventory[data-item=empty] .item-description{display:none}
+body.blackout-mode #blackout-interaction{left:50%;bottom:var(--hud-gap);width:max-content;max-width:calc(100vw - 2 * var(--hud-rail) - 4 * var(--hud-gap));padding:10px 12px;border:0;border-top:1px solid var(--hud-line);background:#080808d9;gap:10px}
+body.blackout-mode #blackout-interaction-label{font:12px/1.5 var(--mono)}
+body.blackout-mode #blackout-interaction-note{font:10px/1.4 var(--mono)}
+body.blackout-mode #blackout-interaction>kbd{font:13px var(--mono);padding:5px 7px}
+body.blackout-mode #blackout-hidden{top:82px;left:var(--hud-gap);transform:none;max-width:45vw;font:11px/1.6 var(--mono);letter-spacing:0;text-align:left}
+body.blackout-mode #blackout-hidden span{text-align:left}
+body.blackout-phone-open .blackout-equipment,body.blackout-phone-open #movement-sound,body.blackout-phone-open #room-inventory{visibility:hidden}
+body.blackout-monitor-open .night-readout-power{left:30px;right:auto;bottom:100px}
+body.blackout-monitor-open #tablet,body.blackout-monitor-open #room-inventory,body.blackout-monitor-open #blackout-interaction{visibility:hidden}
+/* A physical device rises to cover the view; no network-connection screen. */
+#monitor-lift{position:fixed;inset:0;z-index:40;width:100vw;height:100dvh;transform-origin:0 0;border:10px solid #151617;border-radius:22px;background:#030404;box-shadow:0 0 0 2px #6d6f70,0 15px 80px #000;pointer-events:none;will-change:transform;backface-visibility:hidden}
+#monitor-lift .lift-screen{position:absolute;inset:0;overflow:hidden;background:repeating-linear-gradient(0deg,#18191933 0 1px,#040505 1px 4px)}
+#monitor-lift span{position:absolute;left:30px;top:30px;font:24px var(--terminal);color:#b7b8b3}
+#monitor-lift i{position:absolute;left:0;right:0;top:45%;height:2px;box-shadow:0 0 20px 2px #ccd2cd44;background:#d1d8d033}
+body.monitor-lifting #tablet{visibility:hidden}
+body.monitor-lifting #blackout-hud,body.monitor-lifting #room-inventory,body.monitor-lifting #blackout-interaction,body.monitor-lifting #night-readout{visibility:hidden}
+body:not([data-screen=playing]) #monitor-lift{display:none}
+/* All acknowledgement controls stay within the initial viewport. */
+#content-notice{padding:clamp(14px,3vh,28px) clamp(20px,5vw,70px);align-items:center;overflow:hidden}
+#content-notice .notice-sheet{width:min(1060px,100%);max-height:none;padding:0;overflow:visible;display:grid;grid-template-columns:1fr;gap:12px}
+#content-notice .notice-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+#content-notice .notice-brand{font:16px var(--terminal);letter-spacing:1px;margin:7px 0 0;order:2;text-align:right}
+#content-notice #notice-title{font:52px/.85 var(--terminal);letter-spacing:1px;margin:0}
+#content-notice #notice-title>span{font:11px/1.5 var(--mono);letter-spacing:0;margin:9px 0 0}
+#content-notice .notice-languages{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:0;padding:12px 0;border-top:1px solid var(--hud-line);border-bottom:1px solid var(--hud-line)}
+#content-notice .notice-languages>div+div{padding:0 0 0 24px;border-left:1px solid var(--hud-line);border-top:0}
+#content-notice .notice-languages h3{font:12px/1.5 var(--mono);margin:0 0 7px}
+#content-notice .notice-languages p{font:12px/1.65 var(--mono);margin:0 0 7px;color:#aaa}
+#content-notice .notice-languages p:last-child{margin:0}
+#content-notice .notice-confirmations{padding:0;margin:0;border:0;display:grid;gap:4px}
+#content-notice .notice-confirmations legend{font:10px var(--mono);letter-spacing:1px;margin:0 0 6px;padding:0;color:#92908b}
+#content-notice .notice-confirmations label{display:flex;align-items:center;gap:11px;padding:4px 0;min-height:36px;font:12px/1.4 var(--mono)}
+#content-notice .notice-confirmations small{display:inline;font:11px/1.4 var(--mono);margin-left:14px;color:#92908b}
+#content-notice input[type=checkbox]{width:18px;height:18px;min-width:18px;margin:0}
+#content-notice .notice-friendly-option{padding:8px 0;margin:0;min-height:0;border-top:1px solid var(--hud-line);border-bottom:0;font:12px/1.4 var(--mono)}
+#content-notice .notice-friendly-option small{font:10px/1.5 var(--mono);margin-top:3px}
+#content-notice .notice-friendly-option small>span{display:inline;margin-left:10px}
+#content-notice .notice-footer{display:flex;align-items:center;justify-content:space-between;gap:20px}
+#content-notice .notice-confirm-status{font:11px var(--mono);margin:0;min-height:0}
+#content-notice .notice-continue{width:auto;min-height:42px;margin:0;padding:9px 20px;gap:24px;display:flex;flex-direction:row;font:12px var(--mono)}
+#content-notice .notice-continue span{font:20px var(--terminal)}
+#content-notice .notice-exit{font:10px var(--mono);margin:0;text-align:right}
+@media(max-width:900px){:root{--hud-rail:180px;--hud-gap:20px}body.blackout-mode #blackout-interaction{bottom:100px;max-width:calc(100vw - 2 * var(--hud-rail) - 60px)}#content-notice .notice-confirmations small{display:block;margin:2px 0 0}#content-notice .notice-sheet{gap:9px}}
+@media(max-height:660px){:root{--hud-gap:16px}body.blackout-mode #room-inventory{top:130px}body.blackout-mode #room-inventory .item-slot{display:none}body.blackout-mode #heartbeat-hud{bottom:285px}#content-notice .notice-sheet{gap:7px}#content-notice #notice-title{font-size:40px}#content-notice .notice-languages{padding:8px 0}#content-notice .notice-languages p{line-height:1.45}#content-notice .notice-confirmations label{min-height:30px;padding:2px 0}#content-notice .notice-confirmations legend{margin-bottom:4px}#content-notice .notice-friendly-option{padding:5px 0}}
+@media(max-width:560px){:root{--hud-rail:145px;--hud-gap:14px}body.blackout-mode #room-inventory .item-icon{display:none}body.blackout-mode .blackout-equipment{font-size:10px}body.blackout-mode #blackout-interaction{left:42%;bottom:45vh;max-width:68vw}#content-notice{padding:12px 16px}#content-notice .notice-brand{font-size:12px;max-width:100px}#content-notice .notice-languages{gap:12px}#content-notice .notice-languages>div+div{padding-left:12px}#content-notice .notice-languages p{font-size:11px;line-height:1.45}#content-notice .notice-languages h3{font-size:11px}#content-notice .notice-friendly-option small>span{display:block;margin:0}#content-notice .notice-footer{gap:10px}#content-notice .notice-continue{padding:8px 10px;gap:8px}#content-notice .notice-confirm-status{font-size:10px}}
+
+body.blackout-mode .monitor-readout{display:flex;align-items:center;gap:12px;margin:0 0 8px;min-height:24px}
+body.blackout-mode #monitor-lift{box-sizing:border-box}
+body.monitor-lifting .top-status,body.monitor-lifting .top-actions,body.monitor-lifting #heartbeat-hud{visibility:hidden}
+@media(max-height:660px){
+ body.blackout-mode .blackout-equipment{bottom:90px;padding:8px 0}
+ body.blackout-mode #movement-sound{bottom:283px}
+ body.blackout-mode #heartbeat-hud{bottom:281px;height:22px}
+ body.blackout-mode #room-inventory{top:139px;padding-top:7px;padding-bottom:7px}
+ body.blackout-mode #room-inventory .item-copy{gap:3px}
+ body.blackout-mode #room-inventory .item-slot{font-size:8px}
+ body.blackout-mode #room-inventory .item-description,body.blackout-mode #room-inventory .item-status{font-size:9px;line-height:1.3}
+}
+
+body.blackout-mode #room-inventory .item-slot{display:none}
+body.blackout-mode #room-inventory .item-copy{flex:1}
+body.blackout-mode #room-inventory strong{padding-right:26px}
+body.blackout-mode #room-inventory kbd{position:absolute;right:0;top:7px;margin:0 6px 0 0}
+
+/* A restrained anatomical pulse display, driven by the audio beat clock. */
+body.blackout-mode #heartbeat-hud{right:calc(var(--hud-gap) + 115px);width:105px;height:32px;display:flex;flex-direction:row;align-items:center;gap:4px;overflow:visible;filter:none}
+body.blackout-mode #heartbeat-hud .heartbeat-icon{width:32px;height:32px;flex:none;overflow:visible;stroke:none;transform-origin:50% 58%;filter:none}
+body.blackout-mode #heartbeat-hud .heart-body{fill:currentColor;stroke:none}
+body.blackout-mode #heartbeat-hud .heart-vessel{fill:none;stroke:#151515;stroke-width:1.5;stroke-linecap:round}
+body.blackout-mode #heartbeat-hud .heartbeat-ring{fill:none;stroke:currentColor;stroke-width:1;transform-origin:50% 58%}
+body.blackout-mode #heartbeat-hud .heartbeat-trace{display:block;flex:none;width:64px;height:25px;stroke:currentColor;fill:none;stroke-width:1.5}
+@media(max-width:900px){body.blackout-mode #heartbeat-hud{width:72px;right:calc(var(--hud-gap) + 108px)}body.blackout-mode #heartbeat-hud .heartbeat-trace{width:36px}}
+@media(prefers-reduced-motion:reduce){#heartbeat-hud .heartbeat-ring{display:none}}
+
+body.blackout-mode #heartbeat-hud .heartbeat-trace>path:first-child{opacity:.6;stroke-width:2}
+
+/* Keep the cinematic/scare frame free of the device silhouette. */
+body[data-opening="monitor"] #tablet,body[data-phase="caught"] #tablet{display:none!important}
