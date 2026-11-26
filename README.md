@@ -12,8 +12,9 @@ power, use the cameras and the phone, and get back to the security room alive.
 ## What you do
 
 The hotel is dark and the power is out. Find the distribution boxes, hold `E` to repair them,
-avoid *The Last Guest*, and return to the security room. Cameras, room phones and the bed
-hiding spot are your tools. This build covers Night 1.
+avoid *The Last Guest*, and return to the security room. Close the security-room door behind
+you to finish the night. Cameras, room phones and the bed hiding spot are your tools. This
+build covers Night 1.
 
 ## Controls
 
@@ -96,3 +97,7 @@ Everyone confirms their own row. Publishing does not make one person the sole au
 | — | [@MaybeItsAI](https://github.com/MaybeItsAI) | Documentation — to confirm in own PR |
 | — | [@Fhy11401](https://github.com/Fhy11401) | Documentation — to confirm in own PR |
 | — | [@Mikuuuuuchan](https://github.com/Mikuuuuuchan) | Documentation — to confirm in own PR |
+
+**How to update this table:** each member edits only their own row, in their own branch and
+pull request, replacing the placeholder with their registered name and a one-line summary of
+the work they actually did. Do not edit another member's row.
