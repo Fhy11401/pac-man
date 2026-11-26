@@ -98,7 +98,7 @@ Everyone confirms their own row. Publishing does not make one person the sole au
 | --- | --- | --- |
 | 卢泽 (Lu Ze) | [@luze-111](https://github.com/luze-111) | Publisher: repository, README, GitHub Pages deployment |
 | — | [@MaybeItsAI](https://github.com/MaybeItsAI) | Documentation — to confirm in own PR |
-| — | [@Fhy11401](https://github.com/Fhy11401) | Documentation — to confirm in own PR |
+| 冯宏远 (Feng Hongyuan) | [@Fhy11401](https://github.com/Fhy11401) | Documentation: Credits section — asset, music and voice licences |
 | — | [@Mikuuuuuchan](https://github.com/Mikuuuuuchan) | Documentation — to confirm in own PR |
 
 **How to update this table:** each member edits only their own row, in their own branch and
